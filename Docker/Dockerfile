@@ -1,9 +1,9 @@
-FROM ubuntu:18.10
+FROM --platform=linux/amd64 ubuntu:20.04
 
-COPY ./dana ./home/roberto/dana
-COPY ./emergent_web_server ./home/roberto/emergent_web_server
-ENV DANA_HOME=/home/roberto/dana/
-ENV PATH="${PATH}:/home/roberto/dana/"
-WORKDIR /home/roberto/emergent_web_server/pal/
+COPY ./dana ./home/nashid/dana
+COPY ./emergent_web_server ./home/nashid/emergent_web_server
+ENV DANA_HOME=/home/nashid/dana/
+ENV PATH="${PATH}:/home/nashid/dana/"
+WORKDIR /home/nashid/emergent_web_server/pal/
 
 ENTRYPOINT ["/bin/bash", "./../Docker/emergentsys.sh"]

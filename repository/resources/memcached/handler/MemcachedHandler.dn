@@ -1,5 +1,0 @@
-uses net.TCPSocket
-
-interface MemcachedHandler {
-	void processRequest(TCPSocket s)
-}

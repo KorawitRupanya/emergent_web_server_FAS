@@ -1,5 +1,0 @@
-uses net.TCPSocket
-
-interface EPMemcached {
-	void processRequest(TCPSocket s)
-}
