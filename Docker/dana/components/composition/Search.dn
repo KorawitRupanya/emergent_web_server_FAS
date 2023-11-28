@@ -1,6 +1,6 @@
 const byte danaMagic[] = new int[](0x44, 0x41, 0x4E, 0x41, 0x0, 0x1)
 
-component provides Search requires data.StringUtil stringUtil, io.FileSystem fileSystem, ObjectWriter, io.File, data.json.JSONParser parser, io.Output out, System system, os.SystemInfo systemInfo {
+component provides Search requires data.StringUtil stringUtil, io.FileSystem fileSystem, util.ObjectFile, io.File, data.json.JSONParser parser, io.Output out, System system, os.SystemInfo systemInfo, data.query.Search asr, Loader loader {
 	
 	bool Search:isDanaComponent(char path[])
 		{
@@ -29,30 +29,20 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 		String parts[] = stringUtil.explode(intfPackage, ":")
 		intfPackage = parts[0].string
 		if (parts.arrayLength == 2) flavour = parts[1].string
-		
-		ObjectWriter ow = new ObjectWriter(path)
-		
-		InfoSection section = ow.getInfoSection("DNIL", "json")
-		
-		JSONElement document = parser.parseDocument(section.content)
-		
-		JSONElement providedInterfaces = parser.getValue(document, "providedInterfaces")
-		
-		for (int j = 0; j < providedInterfaces.children.arrayLength; j++)
+
+		IDC com = loader.load(path)
+
+		InterfaceSpec interfaces[] = com.getProvides()
+
+		for (int i = 0; i < interfaces.arrayLength; i++)
 			{
-			JSONElement pi = providedInterfaces.children[j]
-			char package[] = parser.getValue(pi, "package").value
-			char semantic[]
-			JSONElement jp = parser.getValue(pi, "semantic")
-			if (jp != null) semantic = jp.value
-			
-			if (flavour == null && semantic.arrayLength == 0 && package == intfPackage)
+			if (flavour == null && interfaces[i].variant.arrayLength == 0 && interfaces[i].package == intfPackage)
 				return true
 			
-			if (flavour == "*" && semantic.arrayLength > 0 && package == intfPackage)
+			if (flavour == "*" && interfaces[i].variant.arrayLength > 0 && interfaces[i].package == intfPackage)
 				return true
 			
-			if (flavour == semantic && package == intfPackage)
+			if (flavour == interfaces[i].variant && interfaces[i].package == intfPackage)
 				return true
 			}
 		
@@ -77,7 +67,7 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 				
 				if (isDanaComponent(fullPath) && providesInterface(fullPath, intfPackage))
 					{
-					result = new String[](result, new String(fullPath))
+					result = new String[](result, new String(fileSystem.getFullPath(fullPath)))
 					}
 				}
 			}
@@ -93,7 +83,7 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 		result = new String[](result, system.getSearchPaths())
 		
 		//CST
-		result = new String[](result, new String(new char[](systemInfo.getVariable("DANA_HOME"), "/components/")))
+		result = new String[](result, new String(new char[](system.getDanaHome(), "/components/")))
 		
 		//pre-process strings into a common format
 		for (int i = 0; i < result.arrayLength; i++)
@@ -106,6 +96,17 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 		return result
 		}
 	
+	String[] mergeUnique(String a[], String b[])
+		{
+		for (int i = 0; i < b.arrayLength; i++)
+			{
+			if (a.findFirst(String.[string], b[i]) == null)
+				a = new String[](a, b[i])
+			}
+
+		return a
+		}
+
 	String[] getComponentsFrom(char intfPackage[], String searchPaths[])
 		{
 		String result[]
@@ -119,7 +120,7 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 			{
 			char test[] = new char[](searchPaths[i].string, path)
 			
-			result = new String[](result, findComponentsIn(test, intfPackage))
+			result = mergeUnique(result, findComponentsIn(test, intfPackage))
 			}
 		
 		return result
@@ -208,7 +209,7 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 					
 					//out.println("candidate: '$result'")
 					
-					if (fileSystem.exists(result)) return result
+					if (fileSystem.exists(result)) return fileSystem.getFullPath(result)
 					}
 				}
 			}
@@ -226,7 +227,7 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 		
 		test = pkg
 		if (fileSystem.exists(new char[](base, test)))
-			return test
+			return fileSystem.getFullPath(test)
 		
 		String qparts[] = stringUtil.explode(pkg, ":")
 		pkg = qparts[0].string
@@ -236,7 +237,7 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 		//local with .o?
 		test = new char[](pkg, flavour, ".o")
 		if (fileSystem.exists(new char[](base, test)))
-			return test
+			return fileSystem.getFullPath(test)
 		
 		//all dots (including final one) converted to slashes, with ".o" appended
 		String parts[] = stringUtil.explode(pkg, ".")
@@ -254,7 +255,7 @@ component provides Search requires data.StringUtil stringUtil, io.FileSystem fil
 		test = new char[](test, flavour, ".o")
 		
 		if (fileSystem.exists(test))
-			return test
+			return fileSystem.getFullPath(test)
 		
 		return null
 		}

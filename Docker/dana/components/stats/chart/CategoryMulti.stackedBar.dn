@@ -56,6 +56,13 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 	
 	bool showStdDev
 	bool showLegend
+
+	byte legendPosition = CategoryMulti.L_INSIDE
+	byte legendModX = 0
+	byte legendModY = 10
+
+	int originWidth = 0
+	int originHeight = 0
 	
 	CategoryMulti:CategoryMulti()
 		{
@@ -66,22 +73,43 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 		setXMarkerInterval(1.0)
 		}
 	
-	void CategoryMulti:addSeries(char name[])
+	void CategoryMulti:setSize(int w, int h)
 		{
-		if (series.search(Series.[name], new Series(null, name)) == null)
-			series = new Series[](series, new Series(null, name, name, new Color(100, 200, 200, 255)))
+		originWidth = w
+		originHeight = h
+		
+		if (legendPosition == CategoryMulti.L_OUTSIDE)
+			{
+			int q = getLongestSeriesName() + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE
+			w -= q
+			}
+
+		super(w, h)
 		}
 	
-	void CategoryMulti:addSample(char seriesName[], char cat[], dec yvalues[])
+	void CategoryMulti:addSeries(char name[], opt store Color color)
 		{
+		if (color == null) color = new Color(100, 200, 200, 255)
+
+		if (series.findFirst(Series.[name], new Series(null, name)) == null)
+			series = new Series[](series, new Series(null, name, name, color))
+		}
+	
+	void CategoryMulti:addSample(char seriesName[], char cat[], dec yvalues[], opt bool redraw)
+		{
+		Series n = series.findFirst(Series.[name], new Series(name = seriesName))
+
+		if (n == null)
+			{
+			throw new Exception("unknown series '$seriesName'; series must first be added using addSeries()")
+			}
+		
 		//update our highest and lowest X and Y points, to use in normalising coordinates
 		dec hy = stcore.max(yvalues)
 		dec ly = stcore.min(yvalues)
 		
-		if (categories.search(String.[string], new String(cat)) == null)
+		if (categories.find(String.[string], new String(cat)) == null)
 			categories = new String[](categories, new String(cat))
-		
-		Series n = series.search(Series.[name], new Series(null, seriesName))[0]
 		
 		xAxMax += 1.0
 		
@@ -108,7 +136,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 		setXMinMax(xAxMin, xAxMax)
 		setYMinMax(yAxMin, yAxMax)
 		
-		postRepaint()
+		if (redraw) postRepaint()
 		}
 	
 	void CategoryMulti:setYMinMax(dec min, dec max)
@@ -128,14 +156,14 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 	
 	void CategoryMulti:setSeriesColor(char seriesName[], Color c)
 		{
-		Series n = series.search(Series.[name], new Series(null, seriesName))[0]
+		Series n = series.find(Series.[name], new Series(null, seriesName))[0]
 		
 		n.seriesColor = c
 		}
 	
 	void CategoryMulti:setSeriesName(char seriesName[], char displayName[])
 		{
-		Series n = series.search(Series.[name], new Series(null, seriesName))[0]
+		Series n = series.find(Series.[name], new Series(null, seriesName))[0]
 		
 		n.displayName = displayName
 		}
@@ -153,6 +181,17 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 	void CategoryMulti:showLegend(bool on)
 		{
 		showLegend = on
+		}
+
+	void CategoryMulti:setLegendPosition(byte type, opt int x, int y)
+		{
+		legendPosition = type
+		if (isset x) legendModX = x
+		if (isset y) legendModY = y
+
+		setSize(originWidth, originHeight)
+
+		postRepaint()
 		}
 	
 	void CategoryMulti:setAxisFont(Font f)
@@ -174,14 +213,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 		barPad = pixels
 		}
 	
-	// -- custom rendering --
-	
-	void CategoryMulti:drawToCanvas(Canvas c)
-		{
-		paint(c)
-		}
-	
-	void prepAxisLimits()
+	bool prepAxisLimits()
 		{
 		dec highX
 		dec lowX
@@ -195,7 +227,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 			
 			for (int j = 0; j < series.arrayLength; j++)
 				{
-				Sample s[] = series[j].samples.search(Sample.[cat], new Sample(null, categories[i].string))
+				Sample s[] = series[j].samples.find(Sample.[cat], new Sample(null, categories[i].string))
 				
 				if (s != null)
 					{
@@ -224,8 +256,12 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 			highX += 1.0
 			}
 		
+		if (lowX == highX || lowY == highY) return false
+		
 		setXMinMax(lowX, highX)
 		setYMinMax(lowY, highY)
+
+		return true
 		}
 	
 	int getLongestSeriesName()
@@ -247,35 +283,41 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 		//calculate the longest series name, and offset the legend by this much from the right (plus the legend color square width)
 		int longestTxt = getLongestSeriesName()
 		
-		int yPos = 10
-		int xStart = getSize().width - (longestTxt + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE)
+		int yPos = legendModY
+		int xStart
+
+		if (legendPosition == CategoryMulti.L_INSIDE || legendPosition == CategoryMulti.L_OUTSIDE)
+			xStart = (originWidth - (longestTxt + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE)) + legendModX
+			else if (legendPosition == CategoryMulti.L_ABSOLUTE)
+			xStart = legendModX
 		
 		int textHeight = axisFont.getFontMetrics().height
 		
 		int totalLegendHeight = ((textHeight + 5) * (series.arrayLength-1)) + textHeight
 		int totalLegendWidth = (longestTxt + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE)
 		
-		c.drawRect(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), bgColor))
-		c.drawRectOutline(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), axisColor))
+		c.rect(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), bgColor))
+		c.rectOutline(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), axisColor))
 		
 		yPos += (axisFont.getFontMetrics().descent)
 		
 		for (int i = series.arrayLength - 1; i != INT_MAX; i--)
 			{
-			c.drawRect(new Rect2D(xStart, yPos, LEGEND_SQ_SIZE, LEGEND_SQ_SIZE, series[i].seriesColor))
+			c.rect(new Rect2D(xStart, yPos, LEGEND_SQ_SIZE, LEGEND_SQ_SIZE, series[i].seriesColor))
 			
 			int yOffset = (yPos + (LEGEND_SQ_SIZE / 2)) - (textHeight / 2)
-			c.drawText(new Point2D(xStart + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE, yOffset, axisColor), axisFont, series[i].displayName)
+			c.text(new Point2D(xStart + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE, yOffset, axisColor), axisFont, series[i].displayName)
 			
 			yPos += textHeight + 5
 			}
 		}
 	
-	// -- screen rendering (temporary?) --
-	
 	void CategoryMulti:paint(Canvas c)
 		{
-		prepAxisLimits()
+		if (!prepAxisLimits())
+			{
+			throw new Exception("chart has no data to plot (min and max data point values are equal)")
+			}
 		
 		Point pos = getPosition()
 		WH wh = getSize()
@@ -285,7 +327,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 		preparePlotArea()
 		
 		//background
-		c.drawRect(new Rect2D(0, 0, wh.width, wh.height, bgColor))
+		c.rect(new Rect2D(0, 0, wh.width, wh.height, bgColor))
 		
 		//grid lines, if any
 		drawGrid(c)
@@ -317,7 +359,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 			
 			for (int j = 0; j < series.arrayLength; j++)
 				{
-				Sample s[] = series[j].samples.search(Sample.[cat], new Sample(null, categories[i].string))
+				Sample s[] = series[j].samples.find(Sample.[cat], new Sample(null, categories[i].string))
 				
 				if (s != null)
 					{
@@ -332,7 +374,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 						int xyTop[] = getPlotPoint(thisX, topY)
 						int xyBot[] = getPlotPoint(thisX+1.0, barTop)
 						
-						c.drawRect(new Rect2D(xyTop[0] + barOffset + barPad, xyTop[1], barWidthPX, xyBot[1] - xyTop[1], series[j].seriesColor))
+						c.rect(new Rect2D(xyTop[0] + barOffset + barPad, xyTop[1], barWidthPX, xyBot[1] - xyTop[1], series[j].seriesColor))
 						
 						barTop = topY
 						}
@@ -343,7 +385,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 						int xyTop[] = getPlotPoint(thisX, barLow)
 						int xyBot[] = getPlotPoint(thisX+1.0, botY)
 						
-						c.drawRect(new Rect2D(xyTop[0] + barOffset + barPad, xyTop[1], barWidthPX, xyBot[1] - xyTop[1], series[j].seriesColor))
+						c.rect(new Rect2D(xyTop[0] + barOffset + barPad, xyTop[1], barWidthPX, xyBot[1] - xyTop[1], series[j].seriesColor))
 						
 						barLow = botY
 						}
@@ -353,7 +395,7 @@ component provides CategoryMulti:stackedBar requires ChartCore, stats.StatCore s
 			//category label
 			
 			int textWidth = axisFont.getTextWidth(categories[i].string)
-			c.drawText(new Point2D(centreX - (textWidth/2), xyZ[1] + MARKER_LENGTH, axisColor), axisFont, categories[i].string)
+			c.text(new Point2D(centreX - (textWidth/2), xyZ[1] + MARKER_LENGTH, axisColor), axisFont, categories[i].string)
 			
 			thisX += 1.0
 			}
