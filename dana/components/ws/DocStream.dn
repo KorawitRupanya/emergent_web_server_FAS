@@ -27,9 +27,8 @@ component provides DocStream requires data.IntUtil intUtil, io.Output out, data.
 	
 	bool sentResponse
 	bool isStream
-	bool encrypted
 	
-	DocStream:DocStream(Stream s, Header headers[], opt bool enc)
+	DocStream:DocStream(Stream s, Header headers[])
 		{
 		socket = s
 		requestHeaders = headers
@@ -51,8 +50,6 @@ component provides DocStream requires data.IntUtil intUtil, io.Output out, data.
 			{
 			sessionKeys[i].value = encoder.decode(sessionKeys[i].value)
 			}
-		
-		encrypted = enc
 		}
 	
 	Header[] getSubHeaders(char content[])
@@ -102,11 +99,6 @@ component provides DocStream requires data.IntUtil intUtil, io.Output out, data.
 	Header[] DocStream:getRequestHeaders()
 		{
 		return requestHeaders
-		}
-	
-	bool DocStream:isEncrypted()
-		{
-		return encrypted
 		}
 	
 	void DocStream:setStatusCode(int code, char reason[], bool stream)

@@ -87,14 +87,13 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 			c == "f" ||
 			c == "n" ||
 			c == "r" ||
-			c == "t" ||
-			c == "\$")
+			c == "t")
 			return true
 		
 		return false
 		}
 	
-	ParseToken consumeString(TokeniseResult status, char string[], int start)
+	ParseToken consumeString(char string[], int start)
 		{
 		ParseToken t = new ParseToken(ParseToken.TYPE_LITERAL_STRING)
 		bool stringClosed = false
@@ -123,14 +122,12 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 						}
 						else
 						{
-						status.issues = new TokeniseIssue[](status.issues, new TokeniseIssue(TokeniseIssue.I_INVALID_UNICODE, "Invalid unicode sequence"))
-						return null
+						throw new Exception("Invalid escape character")
 						}
 					}
 					else
 					{
-					status.issues = new TokeniseIssue[](status.issues, new TokeniseIssue(TokeniseIssue.I_INVALID_ESCAPE_CHAR, "Invalid escape character '$(string[i])'"))
-					return null
+					throw new Exception("Invalid escape character")
 					}
 				}
 				else if (string[i] == "\"")
@@ -147,11 +144,7 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 		t.content = new char[len]
 		copyArray(t.content, string, start+1, len)
 		
-		if (!stringClosed)
-			{
-			status.issues = new TokeniseIssue[](status.issues, new TokeniseIssue(TokeniseIssue.I_UNTERMINATED_STRING, "Unterminated string '$(t.content)'"))
-			return null
-			}
+		if (!stringClosed) throw new Exception("Unterminated string '$(t.content)'")
 		
 		t.sourceStart = start
 		t.sourceLength = t.content.arrayLength + 2
@@ -238,7 +231,7 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 			return false
 	}
 
-	ParseToken consumeNumber(TokeniseResult status, char string[], int start)
+	ParseToken consumeNumber(char string[], int start)
 		{
 		ParseToken t = new ParseToken(ParseToken.TYPE_LITERAL_NUMBER)
 
@@ -265,8 +258,7 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 			
 			if (state == NUMBER_UNKNOWN_STATE)
 				{
-				status.issues = new TokeniseIssue[](status.issues, new TokeniseIssue(TokeniseIssue.I_UNKNOWN_NUMBER_FORMAT, "Unknown number format $(t.content)$(string[i])"))
-				return null
+				throw new Exception("Unknown number format $(t.content)$(string[i])")
 				}
 			}
 		
@@ -277,8 +269,7 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 			}
 			else
 			{
-			status.issues = new TokeniseIssue[](status.issues, new TokeniseIssue(TokeniseIssue.I_UNKNOWN_NUMBER_FORMAT, "Unknown number format"))
-			return null
+			throw new Exception("Unknown number format")
 			}
 
 		return t
@@ -390,10 +381,8 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 		return si == search.arrayLength
 		}
 	
-	TokeniseResult Tokeniser:tokenise(char content[])
+	ParseToken[] Tokeniser:tokenise(char content[])
 		{
-		TokeniseResult status = new TokeniseResult()
-
 		ParseToken result[]
 		int i = 0
 		while (i < content.arrayLength)
@@ -405,11 +394,11 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 				
 				if (content[i] == "\"")
 					{
-					next = consumeString(status, content, i)
+					next = consumeString(content, i)
 					}
 					else if (stringUtil.isNumeric(new char[](content[i])))
 					{
-					next = consumeNumber(status, content, i)
+					next = consumeNumber(content, i)
 					}
 					else if (blockComment != null && isToken(content, i, blockComment[0].string))
 					{
@@ -440,8 +429,6 @@ component provides parsing.Tokeniser requires io.Output out, data.StringUtil str
 				}
 			}
 		
-		status.tokens = result
-		
-		return status
+		return result
 		}
 	}

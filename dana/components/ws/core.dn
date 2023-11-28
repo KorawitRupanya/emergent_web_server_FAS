@@ -8,6 +8,8 @@ URLs for your website are mapped as follows:
 
 */
 
+// example: dana ws.core -p 80 -cert ssl/www_projectdana_com.crt -key ssl/private_key.txt
+
 const char SWC_PATH[] = "/swc/"
 const int LISTEN_PORT = 8080
 const int LISTEN_PORT_SSL = 443
@@ -47,9 +49,6 @@ component provides App requires io.Output out, net.TCPServerSocket, net.TCPSocke
 	String staticDirectories[] = new String[](new String("/swc/"))
 	
 	ConfigData config = new ConfigData(landingPages = landingPages)
-
-	bool reuseAddr
-	bool helpMode
 	
 	void populateStaticServe()
 		{
@@ -157,27 +156,19 @@ component provides App requires io.Output out, net.TCPServerSocket, net.TCPSocke
 				
 				sslPrivateKeyFile = params[i+1].string
 				}
-				else if (params[i].string == "-help")
-				{
-				helpMode = true
-				}
-				else if (params[i].string == "-reuse")
-				{
-				reuseAddr = true
-				}
 			}
 		
 		return true
 		}
 	
-	bool loadSSLContext(char certificatePath[], char privateKeyPath[])
+	bool loadSSLContext(char certificate[], byte privateKey[])
 		{
-		File fd = new File(certificatePath, File.READ)
-		byte certificate[] = fd.read(fd.getSize())
+		File fd = new File(sslCertificateFile, File.READ)
+		certificate = fd.read(fd.getSize())
 		fd.close()
 		
-		fd = new File(privateKeyPath, File.READ)
-		byte privateKey[] = fd.read(fd.getSize())
+		fd = new File(sslPrivateKeyFile, File.READ)
+		privateKey = fd.read(fd.getSize())
 		fd.close()
 		
 		tlsContext = new TLSContext(TLSContext.SERVER)
@@ -192,7 +183,7 @@ component provides App requires io.Output out, net.TCPServerSocket, net.TCPSocke
 		{
 		TCPServerSocket server = new TCPServerSocket()
 		
-		if (!server.bind(TCPServerSocket.ANY_ADDRESS, sslPort, reuseAddr))
+		if (!server.bind(TCPServerSocket.ANY_ADDRESS, sslPort))
 			return
 		
 		while (true)
@@ -201,8 +192,10 @@ component provides App requires io.Output out, net.TCPServerSocket, net.TCPSocke
 			
 			if (client.accept(server))
 				{
+				TLS ssl = new TLS(tlsContext)
+				
 				//(note, the ssl accept is done within the request handler, because it can block)
-				rh.processStream(client, tlsContext, config)
+				rh.processStream(client, ssl, config)
 				}
 			}
 		}
@@ -218,20 +211,6 @@ component provides App requires io.Output out, net.TCPServerSocket, net.TCPSocke
 		sslPort = LISTEN_PORT_SSL
 		
 		if (!parseParams(params)) return 1
-
-		if (helpMode)
-			{
-			out.println("usage: ws.core [options]")
-			out.println(" This program assumes a file ws/Web.o is present in launch directory, which")
-			out.println(" must implement the ws.Web interface.")
-			out.println("")
-			out.println(" Options for ws.core:")
-			out.println(" -p    portNumber     Set the port number on which the web service will listen")
-			out.println(" -pssl portNumber     Set the port on which to listen for TLS connections")
-			out.println(" -cert c              Set the path to the TLS X509 certificate file")
-			out.println(" -key  k              Set the path to the TLS private key file")
-			return 0
-			}
 		
 		//parse list of static-serve directories, if any
 		populateStaticServe()
@@ -252,7 +231,7 @@ component provides App requires io.Output out, net.TCPServerSocket, net.TCPSocke
 		//start server
 		TCPServerSocket s = new TCPServerSocket()
 		
-		if (!s.bind(TCPServerSocket.ANY_ADDRESS, listenPort, reuseAddr))
+		if (!s.bind(TCPServerSocket.ANY_ADDRESS, listenPort))
 			{
 			throw new Exception("Failed to bind master socket")
 			}

@@ -4,18 +4,14 @@ This is a REST API for the PAL service. You can visit localhost:HOST_POST/meta/ 
 
 uses pal.Perception
 
-const int HOST_PORT = 8008
+const int HOST_POST = 8008
 
-component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du, pal.Assembly, time.Timer timer, composition.RecursiveLoader loader, data.StringUtil stringUtil, net.TCPServerSocket, net.TCPSocket, data.json.JSONParser parser, composition.Search search, data.StringBuilder, io.FileSystem fs, System system {
+component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du, pal.Assembly, time.Timer timer, composition.RecursiveLoader loader, data.StringUtil stringUtil, net.TCPServerSocket, net.TCPSocket, data.json.JSONParser parser, composition.Search search, data.StringBuilder, io.FileSystem fs {
 	
 	bool running = true
 	char currentConfig[]
 	String configs[]
 	char systemPath[]
-
-	char HOST_ADDRESS[] = "127.0.0.1"
-
-	TCPServerSocket server
 	
 	Assembly assembly
 	Perception perc
@@ -89,7 +85,7 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 	
 	char[] dateToString(DateTime dt)
 		{
-		char year[] = iu.makeString(dt.year)
+		char year[] = iu.intToString(dt.year)
 		while (year.arrayLength < 4) year = new char[]("0", year)
 		char month[] = iu.makeString(dt.month)
 		if (month.arrayLength < 2) month = new char[]("0", month)
@@ -119,7 +115,7 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 				
 				if (pd.metrics[i].preferHigh) preferHigh = "true"
 				
-				content = new char[](content, "{\"name\" : \"$(pd.metrics[i].name)\", \"source\" : \"$(pd.metrics[i].sourceComponent)\", \"value\" : $(pd.metrics[i].totalValue), \"count\" : $(iu.makeString(pd.metrics[i].totalCount)), \"preferHigh\" : $preferHigh, \"startTime\" : \"$(dateToString(pd.metrics[i].timeFirst))\", \"endTime\" : \"$(dateToString(pd.metrics[i].timeLast))\"}")
+				content = new char[](content, "{\"name\" : \"$(pd.metrics[i].name)\", \"source\" : \"$(pd.metrics[i].sourceComponent)\", \"value\" : $(iu.intToString(pd.metrics[i].totalValue)), \"count\" : $(iu.makeString(pd.metrics[i].totalCount)), \"preferHigh\" : $preferHigh, \"startTime\" : \"$(dateToString(pd.metrics[i].timeFirst))\", \"endTime\" : \"$(dateToString(pd.metrics[i].timeLast))\"}")
 				if (i + 1 < pd.metrics.arrayLength) content = new char[](content, ",")
 				}
 			content = new char[](content, "], ")
@@ -127,7 +123,7 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 			content = new char[](content, "\"events\" : [")
 			for (int i = 0; i < pd.events.arrayLength; i++)
 				{
-				content = new char[](content, "{\"name\" : \"$(pd.events[i].name)\", \"source\" : \"$(pd.events[i].sourceComponent)\", \"value\" : $(pd.events[i].totalValue), \"count\" : $(iu.makeString(pd.events[i].totalCount)), \"startTime\" : \"$(dateToString(pd.events[i].timeFirst))\", \"endTime\" : \"$(dateToString(pd.events[i].timeLast))\"}")
+				content = new char[](content, "{\"name\" : \"$(pd.events[i].name)\", \"source\" : \"$(pd.events[i].sourceComponent)\", \"value\" : $(iu.intToString(pd.events[i].totalValue)), \"count\" : $(iu.makeString(pd.events[i].totalCount)), \"startTime\" : \"$(dateToString(pd.events[i].timeFirst))\", \"endTime\" : \"$(dateToString(pd.events[i].timeLast))\"}")
 				if (i + 1 < pd.events.arrayLength) content = new char[](content, ",")
 				}
 			content = new char[](content, "], ")
@@ -314,10 +310,8 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 				if (contentType == "text")
 					{
 					char comp[] = socket.recv(iu.intFromString(payloadSize))
-
-					String newConfigs[] = assembly.addComponent(comp)
 					
-					if (newConfigs != null)
+					if (assembly.addComponent(comp))
 						{
 						//respond with HTTP OK
 						sendOK(socket, "text/html", null)
@@ -343,10 +337,8 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 				if (contentType == "text")
 					{
 					char comp[] = socket.recv(iu.intFromString(payloadSize))
-
-					String remConfigs[] = assembly.remComponent(comp)
 					
-					if (remConfigs != null)
+					if (assembly.remComponent(comp))
 						{
 						//respond with HTTP OK
 						sendOK(socket, "text/html", null)
@@ -372,16 +364,15 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 				if (contentType == "text")
 					{
 					char comp[] = socket.recv(iu.intFromString(payloadSize))
-
-					UpdateInfo uinfo = assembly.updComponent(comp)
 					
-					if (uinfo != null)
+					char res[] = null
+					if ((res = assembly.updComponent(comp)) != null)
 						{
 						//respond with HTTP OK
-						sendOK(socket, "text", uinfo.currentConfig)
+						sendOK(socket, "text", res)
 						
 						configs = assembly.getConfigs()
-						currentConfig = uinfo.currentConfig
+						currentConfig = configs[0].string
 						}
 						else
 						{
@@ -391,6 +382,51 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 					else
 					{
 					sendError(socket, "text", "Content type must be text")
+					}
+				}
+				else if (rsc == "/meta/upd_arch")
+				{
+				char contentType[] = getHeaderValue(headers, "content-type")
+				char payloadSize[] = getHeaderValue(headers, "content-length")
+				
+				if (contentType == "text/json")
+					{
+					char intfs[] = socket.recv(iu.intFromString(payloadSize))
+					
+					//parse the JSON array
+					JSONElement doc = parser.parseDocument(intfs)
+					
+					if (doc.type == JSONElement.TYPE_ARRAY)
+						{
+						String ifGroup[] = new String[doc.children.arrayLength]
+						
+						for (int i = 0; i < doc.children.arrayLength; i++)
+							{
+							ifGroup[i] = new String(doc.children[i].value)
+							}
+						
+						char res[] = null
+						if ((res = assembly.updArch(ifGroup)) != null)
+							{
+							//respond with HTTP OK
+							sendOK(socket, "text", res)
+							
+							configs = assembly.getConfigs()
+							currentConfig = configs[0].string
+							}
+							else
+							{
+							sendError(socket, "text", "Update of architecture failed (check all components exist in the system's default search paths)")
+							}
+						}
+						else
+						{
+						sendError(socket, "text", "Content type must be an array of strings")
+						}
+					}
+					else
+					{
+					sendError(socket, "text", "Content type must be text/json")
 					}
 				}
 				else if (rsc == "/meta/add_intercept")
@@ -466,70 +502,24 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 	
 	void serverThread(int port)
 		{
-		out.println("[REST service started, visit http://localhost:$port/meta/ for API details]")
+		TCPServerSocket server = new TCPServerSocket()
 		
-		while (running)
+		if (server.bind(TCPServerSocket.ANY_ADDRESS, port))
 			{
-			TCPSocket s = new TCPSocket()
+			out.println("[REST service started, visit http://localhost:$port/meta/ for API details]")
 			
-			if (s.accept(server))
-				handleRequest(s)
+			while (running)
+				{
+				TCPSocket s = new TCPSocket()
+				
+				if (s.accept(server))
+					handleRequest(s)
+				}
 			}
-		}
-	
-	char[] searchPaths(char f[])
-		{
-		if (fs.exists(f)) return f
-
-		String sp[] = new String[](new String("$(system.getDanaHome())/components"), system.getSearchPaths())
-
-		for (int i = 0; i < sp.arrayLength; i++)
+			else
 			{
-			if (fs.exists("$(sp[i].string)/$f"))
-				return "$(sp[i].string)/$f"
+			out.println("Failed to bind to server port")
 			}
-
-		return null
-		}
-	
-	//this function resolves any valid way of specifying an object file
-	char[] findObjectFile(char f[])
-		{
-		char result[] = null
-
-		//try all of our search paths
-		if ((result = searchPaths(f)) != null)
-			return result
-		
-		if ((result = searchPaths("$f.o")) != null)
-			return result
-
-		//convert dots to slashes, iteratively, starting from the left
-		// - for each iteration, try all of our search paths
-		// - then append .o, and try all of our search paths again
-		char rhs[] = f
-		char lhs[] = ""
-		String parts[] = rhs.lsplit(".")
-		while (parts != null)
-			{
-			rhs = parts[1].string
-			if (lhs.arrayLength == 0)
-				lhs = parts[0].string
-				else
-				lhs = "$lhs/$(parts[0].string)"
-			
-			char form[] = "$lhs/$rhs"
-			if ((result = searchPaths(form)) != null)
-				return result
-			
-			form = "$lhs/$rhs.o"
-			if ((result = searchPaths(form)) != null)
-				return result
-			
-			parts = rhs.lsplit(".")
-			}
-
-		return null
 		}
 	
 	int App:main(AppParam params[])
@@ -541,142 +531,60 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 			out.println("Any parameters after main_component.o are passed to the sub-program")
 			out.println("")
 			out.println("options for pal.rest:")
-			out.println(" -exc \"a;b;c\"        Exclude given components from initial compostion search")
-			out.println(" -xd  \"a;b;c\"        Disable exception printing for specific components")
-			out.println(" -p   portNumber     Set the port number on which the REST service will listen")
-			out.println(" -a   serverAddress  Set the server address to bind the REST service to")
-			out.println("                     Default address is 127.0.0.1 (local connections only)")
-			out.println("                     To support remote connections, use ANY, ANY_v4, or ANY_v6)")
+			out.println(" -p portNumber     Set the port number on which the REST service will listen")
 			return 0
 			}
 		
 		char objectFile[] = null
 		
-		int serverPort = HOST_PORT
-		char serverAddress[] = HOST_ADDRESS
-
-		String cExclude[] = null
-
-		String exceptionsDisable[] = null
+		int serverPort = HOST_POST
 		
-		AppParam subParams[] = null
+		store AppParam subParams[] = null
 		
 		for (int i = 0; i < params.arrayLength; i++)
 			{
-			if (objectFile == null)
+			if (params[i].string == "-p")
 				{
-				//parameters here are for pal.rest
-				if (params[i].string == "-p")
+				if (i + 1 < params.arrayLength)
 					{
-					if (i + 1 < params.arrayLength)
+					if (stringUtil.isNumeric(params[i+1].string))
 						{
-						if (stringUtil.isNumeric(params[i+1].string))
-							{
-							serverPort = iu.intFromString(params[i+1].string)
-							i ++
-							}
-							else
-							{
-							out.println("expected port number after -p")
-							return 0
-							}
+						serverPort = iu.intFromString(params[i+1].string)
+						i ++
 						}
 						else
 						{
 						out.println("expected port number after -p")
-						return 0
-						}
-					}
-					else if (params[i].string == "-a")
-					{
-					if (i + 1 < params.arrayLength)
-						{
-						serverAddress = params[i+1].string
-
-						if (serverAddress == "ANY")
-							serverAddress = TCPServerSocket.ANY_ADDRESS
-							else if (serverAddress == "ANY_v4")
-							serverAddress = TCPServerSocket.ANY_ADDRESS_v4
-							else if (serverAddress == "ANY_v6")
-							serverAddress = TCPServerSocket.ANY_ADDRESS_v6
-						
-						i ++
-						}
-						else
-						{
-						out.println("expected IP address, or ANY, ANY_v4, ANY_v6 after -a")
-						return 0
-						}
-					}
-					else if (params[i].string == "-exc")
-					{
-					if (i + 1 < params.arrayLength)
-						{
-						cExclude = params[i+1].string.explode(";")
-						i ++
-						}
-						else
-						{
-						out.println("expected one or more components to exclude after -exc")
-						return 0
-						}
-					}
-					else if (params[i].string == "-xd")
-					{
-					if (i + 1 < params.arrayLength)
-						{
-						exceptionsDisable = new String[](exceptionsDisable, params[i+1].string.explode(";"))
-						i ++
-						}
-						else
-						{
-						out.println("expected one or more components to exclude after -xd")
-						return 0
 						}
 					}
 					else
 					{
-					objectFile = params[i].string
+					out.println("expected port number after -p")
+					return 0
 					}
 				}
-				else
+				else if (objectFile == null)
 				{
-				//collect as a sub-parameter to pass to the sub-program we're launching
+				objectFile = params[i].string
+				}
+				else if (objectFile != null)
+				{
 				subParams = new AppParam[](subParams, new AppParam(params[i].string))
 				}
 			}
 		
-		if (objectFile == null)
-			{
-			out.println("object file not specified")
-			return 1
-			}
-		
 		objectFile = objectFile.explode("\\").implode("/")
-
-		char resolvedFile[] = null
 		
-		if ((resolvedFile = findObjectFile(objectFile)) == null)
+		if (!fs.exists(objectFile))
 			{
 			out.println("object file $objectFile not found")
 			return 1
 			}
 		
-		server = new TCPServerSocket()
-		
-		if (!server.bind(serverAddress, serverPort))
-			{
-			out.println("failed to bind to server address/port of $(serverAddress)/$(serverPort)")
-			return 1
-			}
-		
-		//we need to find the fully-qualified path to the object file we're launching, so we can pass it in to App.setSourcePath()
-		int splitPoint = 0
-		systemPath = fs.getFullPath(resolvedFile)
-		if ((splitPoint = systemPath.rfind("/")) != StringUtil.NOT_FOUND)
-			systemPath = systemPath.subString(0, splitPoint+1)
-			else
-			systemPath = "."
+		int pathMod = 0
+		if (objectFile.startsWith("./")) pathMod = 2
+		systemPath = fs.getFullPath(objectFile)
+		systemPath = systemPath.subString(0, systemPath.arrayLength - (objectFile.arrayLength-pathMod))
 		
 		out.println("[system home path: $systemPath]")
 		
@@ -687,12 +595,11 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 		out.println("[scanning system for components, please be patient...]")
 		
 		perc = new Perception() from perception
-		assembly = new Assembly(fs.getFullPath(resolvedFile), subParams, perception, componentExcludeList = cExclude)
-		assembly.disableExceptions(exceptionsDisable)
+		assembly = new Assembly(objectFile, subParams, perception)
 		
 		configs = assembly.getConfigs()
 		
-		out.println("[located $(configs.arrayLength) possible configurations for target software system]")
+		out.println("[located $(iu.intToString(configs.arrayLength)) possible configurations for target software system]")
 		
 		assembly.setConfig(configs[0].string)
 		currentConfig = configs[0].string
@@ -701,10 +608,6 @@ component provides App requires io.Output out, data.IntUtil iu, data.DecUtil du,
 		asynch::serverThread(serverPort)
 		
 		assembly.runApp(systemPath)
-
-		running = false
-
-		server.unbind()
 		
 		return 0
 		}

@@ -17,7 +17,7 @@ interface Category extends ChartCore {
 		"values" : "The values for this series data for this category."
 		}
 	*/
-	void addSample(char cat[], dec values[], opt bool redraw)
+	void addSample(char cat[], dec values[])
 	
 	/*
 	 {"@description" : "Sets a color used to display this series.",
@@ -53,5 +53,12 @@ interface Category extends ChartCore {
 		}
 	*/
 	void setCatDisplayPadding(int pixels)
+	
+	/*
+	 {"@description" : "Render the graph to a specific canvas, such as an SVGCanvas.",
+	 	"c" : "The canvas to draw to."
+		}
+	*/
+	void drawToCanvas(Canvas c)
 	
 	}

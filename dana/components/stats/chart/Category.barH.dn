@@ -53,7 +53,7 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 		setYMarkerInterval(1.0)
 		}
 	
-	void Category:addSample(char cat[], dec yvalues[], opt bool redraw)
+	void Category:addSample(char cat[], dec yvalues[])
 		{
 		//update our highest and lowest X and Y points, to use in normalising coordinates
 		dec hy = stcore.max(yvalues)
@@ -84,7 +84,7 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 		setXMinMax(xAxMin, xAxMax)
 		setYMinMax(yAxMin, yAxMax)
 		
-		if (redraw) postRepaint()
+		postRepaint()
 		}
 	
 	void Category:setYLabelInterval(dec ivr)
@@ -136,6 +136,13 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 		barPad = pixels
 		}
 	
+	// -- custom rendering --
+	
+	void Category:drawToCanvas(Canvas c)
+		{
+		paint(c)
+		}
+	
 	void prepAxisLimits()
 		{
 		dec highX
@@ -183,6 +190,8 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 		return high
 		}
 	
+	// -- screen rendering (temporary?) --
+	
 	void Category:paint(Canvas c)
 		{
 		prepAxisLimits()
@@ -198,7 +207,7 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 		preparePlotArea()
 		
 		//background
-		c.rect(new Rect2D(0, 0, wh.width, wh.height, bgColor))
+		c.drawRect(new Rect2D(0, 0, wh.width, wh.height, bgColor))
 		
 		//grid lines, if any
 		drawGrid(c)
@@ -233,7 +242,7 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 			
 			int centreY = xy[1] + ((xyBL[1] - xy[1]) / 2)
 			
-			c.rect(new Rect2D(xLow, (centreY - (barHeightPX / 2)) - barPad, xHigh - xLow, barHeightPX, seriesColor))
+			c.drawRect(new Rect2D(xLow, (centreY - (barHeightPX / 2)) - barPad, xHigh - xLow, barHeightPX, seriesColor))
 			
 			if (showStdDev)
 				{
@@ -244,10 +253,10 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 					int xyHigh[] = getPlotPoint(thisX+stdDev, thisY)
 					int xyLow[] = getPlotPoint(thisX-stdDev, thisY)
 					
-					c.line(new Line2D(xyHigh[0], centreY, xyLow[0], centreY, stdDevColor))
+					c.drawLine(new Line2D(xyHigh[0], centreY, xyLow[0], centreY, stdDevColor))
 					
-					c.line(new Line2D(xyHigh[0], centreY-MARKER_SIZE/2, xyHigh[0], centreY+MARKER_SIZE/2, stdDevColor))
-					c.line(new Line2D(xyLow[0], centreY-MARKER_SIZE/2, xyLow[0], centreY+MARKER_SIZE/2, stdDevColor))
+					c.drawLine(new Line2D(xyHigh[0], centreY-MARKER_SIZE/2, xyHigh[0], centreY+MARKER_SIZE/2, stdDevColor))
+					c.drawLine(new Line2D(xyLow[0], centreY-MARKER_SIZE/2, xyLow[0], centreY+MARKER_SIZE/2, stdDevColor))
 					}
 				}
 			
@@ -255,7 +264,7 @@ component provides Category:barH requires ChartCore, stats.StatCore stcore, io.O
 			int textWidth = axisFont.getTextWidth(samples[i].category)
 			int textHeight = axisFont.getFontMetrics().height
 			
-			c.text(new Point2D(getPlotArea().x - MARKER_LENGTH - textWidth, centreY - (textHeight / 2), axisColor), axisFont, samples[i].category)
+			c.drawText(new Point2D(getPlotArea().x - MARKER_LENGTH - textWidth, centreY - (textHeight / 2), axisColor), axisFont, samples[i].category)
 			
 			thisY += 1.0
 			}

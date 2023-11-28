@@ -15,7 +15,7 @@ data IncludeList{
 	String list[]
 	}
 
-component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File, data.json.JSONParser parser, data.StringUtil stringUtil, parsing.Tokeniser, data.IntUtil iu, System system {
+component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File, data.json.JSONParser parser, data.StringUtil stringUtil, data.Tokeniser, data.IntUtil iu, os.SystemInfo sysInfo {
 	
 	SourceFile primaryFiles[]
 	SourceFile supportFiles[]
@@ -77,6 +77,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 		parseKeywords = new String[](new String("component"),
 									new String("interface"),
 									new String("data"),
+									new String("record"),
 									new String("extends"),
 									new String("provides"),
 									new String("requires"),
@@ -474,7 +475,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 			start ++
 			
 			//array?
-			while (tokens[start].content == "[")
+			if (tokens[start].content == "[")
 				{
 				if (tokens[start+1].content != "]")
 					return false
@@ -680,7 +681,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 			start ++
 			
 			//array?
-			while (tokens[start].content == "[")
+			if (tokens[start].content == "[")
 				{
 				if (tokens[start+1].content != "]")
 					return 0
@@ -737,7 +738,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 			
 			start ++
 			
-			while (tokens[start].content == "[")
+			if (tokens[start].content == "[")
 				{
 				if (tokens[start+1].content != "]")
 					return 0
@@ -1094,7 +1095,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 		return null
 		}
 	
-	char[] resolvePackageToFile(SourceFile sf, char package[], String searchPaths[])
+	char[] resolvePackageToFile(SourceFile sf, char package[])
 		{
 		char epath[] = new char[](stringUtil.implode(stringUtil.explode(package, "."), "/"), ".dn")
 		
@@ -1115,18 +1116,9 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 		if (fs.exists(test))
 			return test
 		
-		// - check search paths
-		for (int i = 0; i < searchPaths.arrayLength; i++)
-			{
-			test = new char[](searchPaths[i].string, "/resources/", epath)
-
-			if (fs.exists(test))
-				return test
-			}
-
 		// - check centrally
 		
-		test = new char[](system.getDanaHome(), "/components/resources/", epath)
+		test = new char[](sysInfo.getVariable("DANA_HOME"), "/resources/", epath)
 		
 		if (fs.exists(test))
 			return test
@@ -1157,7 +1149,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 			}
 		}
 	
-	void collectExternalTypes(SourceFile root_sf, SourceFile sf, IncludeList incList, String searchPaths[])
+	void collectExternalTypes(SourceFile root_sf, SourceFile sf, IncludeList incList)
 		{
 		//scan over all "uses" entries and "extends" clauses, but don't visit any files already in parsedFiles
 		for (int i = 0; i < incList.list.arrayLength; i++)
@@ -1165,7 +1157,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 			char package[] = incList.list[i].string
 			
 			//resolve this package into a file to parse, relative to sf.path
-			char path[] = resolvePackageToFile(sf, package, searchPaths)
+			char path[] = resolvePackageToFile(sf, package)
 			
 			if (path == null)
 				{
@@ -1193,10 +1185,9 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 						if (root_sf !== sf) sf.supportFiles = new SourceFile[](sf.supportFiles, q)
 						root_sf.supportFiles = new SourceFile[](root_sf.supportFiles, q)
 						
-						TokeniseResult result = tokeniser.tokenise(content)
-						ParseToken tokens[] = result.tokens
+						ParseToken tokens[] = tokeniser.tokenise(content)
 						
-						parseTokens(root_sf, q, tokens, searchPaths)
+						parseTokens(root_sf, q, tokens)
 						}
 					}
 					else
@@ -1218,7 +1209,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 			}
 		}
 	
-	void parseTokens(SourceFile root_sf, SourceFile sf, ParseToken tokens[], String searchPaths[])
+	void parseTokens(SourceFile root_sf, SourceFile sf, ParseToken tokens[])
 		{
 		//TODO: group tokens into expressions, type definitions etc.
 		// - we need to do the same multi-pass process as the compiler: first scan for type definitions, then populate the types with their fields, etc.
@@ -1258,7 +1249,7 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 		
 		//from the headers of "uses" and type definitions, collect all external types from other source files
 		// - the below function should check supportFiles first to see if already parsed, and if so just add a reference to sf's list
-		collectExternalTypes(root_sf, sf, incList, searchPaths)
+		collectExternalTypes(root_sf, sf, incList)
 		
 		//now that we have all externally-defined types, parse the internals of the type definitions (i.e. fields) from this source file
 		parseTypeDetails(root_sf, sf, tokens)
@@ -1275,23 +1266,31 @@ component provides DocBuilder requires io.Output out, io.FileSystem fs, io.File,
 		tokeniser.setBlockComment("/*", "*/")
 		}
 	
-	bool DocBuilder:parseFile(char content[], opt char filePath[], opt String searchPaths[])
+	bool DocBuilder:parseFile(char path[])
 		{
-		TokeniseResult result = tokeniser.tokenise(content)
-		ParseToken tokens[] = result.tokens
+		File fd = new File(path, File.READ)
 		
-		/*
-		for (int i = 0; i < tokens.arrayLength; i++)
+		if (fd != null)
 			{
-			out.println("<$(iu.makeString(tokens[i].type))>token: $(tokens[i].content)")
+			char content[] = fd.read(fd.getSize())
+			
+			ParseToken tokens[] = tokeniser.tokenise(content)
+			
+			/*
+			for (int i = 0; i < tokens.arrayLength; i++)
+				{
+				out.println("<$(iu.makeString(tokens[i].type))>token: $(tokens[i].content)")
+				}
+			*/
+			
+			fd.close()
+			
+			SourceFile sf = new SourceFile(path)
+			
+			parseTokens(sf, sf, tokens)
+			
+			primaryFiles = new SourceFile[](primaryFiles, sf)
 			}
-		*/
-		
-		SourceFile sf = new SourceFile(filePath)
-		
-		parseTokens(sf, sf, tokens, searchPaths)
-		
-		primaryFiles = new SourceFile[](primaryFiles, sf)
 		
 		return true
 		}

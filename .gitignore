@@ -1,6 +1,3 @@
 .DS_Store
-*.o
-*.gz
-*.zl
 *.out
 *.iml

@@ -50,9 +50,6 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 	int currentWidth = 500
 	int currentHeight = 500
 
-	int windowedWidth = 500
-	int windowedHeight = 500
-
 	bool isMaximised
 	int restoredWidth
 	int restoredHeight
@@ -62,10 +59,6 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 	bool fullScreen
 	
 	byte keyState //used for hot key triggers
-
-	//note if we currently have an override cursor in place, and if so also remember what the "base" cursor to return to is
-	bool cursorOverride
-	CursorSetEvent baseCursor
 	
 	bool closed
 	
@@ -80,7 +73,7 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 		if (ed.type == IOWindow.[mouseUp])
 			{
 			MouseEvent me = ed.details
-			mouseUpClick(me.x, me.y, me.button, me.exd1)
+			mouseUp(me.x, me.y, me.button)
 			}
 			else if (ed.type == IOWindow.[mouseDown])
 			{
@@ -91,11 +84,6 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 			{
 			MouseEvent me = ed.details
 			mouseMove(me.x, me.y)
-			}
-			else if (ed.type == IOWindow.[mouseWheel])
-			{
-			MouseEvent me = ed.details
-			mouseWheel(me.x, me.exd1, me.y, me.exd2)
 			}
 			else if (ed.type == IOWindow.[fileDrop])
 			{
@@ -115,16 +103,7 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 			else if (ed.type == IOWindow.[resizeWindow])
 			{
 			WH wh = ed.details
-			
-			currentWidth = wh.width
-			currentHeight = wh.height
-
-			windowedWidth = currentWidth
-			windowedHeight = currentHeight
-			
-			emitevent resize(wh)
-			
-			postRepaint()
+			setSize(wh.width, wh.height)
 			}
 			else if (ed.type == IOWindow.[moveWindow])
 			{
@@ -186,29 +165,12 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 			postRepaint()
 			}
 		}
-	
-	eventsink CursorEvents(EventData ed)
-		{
-		if (ed.type == XYMouseObject.[setCursor])
-			{
-			CursorSetEvent cse = ed.details
-
-			if (!cursorOverride)
-				{
-				canvas.setCursor(cse.type, cse.cursor)
-				}
-			
-			baseCursor = cse
-			}
-		}
 
 	Window:Window(char title[])
 		{
 		canvas = new IOWindow()
 		
 		canvas.setTitle(title)
-
-		repaintOn = true
 
 		sinkevent Events(canvas)
 		}
@@ -228,22 +190,9 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 		canvas.setFullScreen(b)
 		fullScreen = b
 
-		if (b)
-			{
-			windowedWidth = currentWidth
-			windowedHeight = currentHeight
-
-			WH sz = canvas.getResolution()
-			currentWidth = sz.width
-			currentHeight = sz.height
-			}
-			else
-			{
-			currentWidth = windowedWidth
-			currentHeight = windowedHeight
-			}
-
-		postRepaint()
+		WH sz = canvas.getResolution()
+		currentWidth = sz.width
+		currentHeight = sz.height
 		}
 
 	void Window:setTitle(char title[])
@@ -254,67 +203,6 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 	void Window:setIcon(PixelMap p)
 		{
 		canvas.setIcon(p)
-		}
-	
-	void Window:setCursor(byte cursorType, Cursor c)
-		{
-		if (cursorType != IOWindow.CURSOR_DEFAULT)
-			{
-			cursorOverride = true
-			canvas.setCursor(cursorType, c)
-			}
-			else
-			{
-			cursorOverride = false
-
-			if (baseCursor != null)
-				{
-				canvas.setCursor(baseCursor.type, baseCursor.cursor)
-				}
-				else
-				{
-				canvas.setCursor(IOWindow.CURSOR_DEFAULT)
-				}
-			}
-		}
-	
-	void Window:setPosition(int x, int y)
-		{
-		currentX = x
-		currentY = y
-		canvas.setPosition(x, y)
-		}
-
-	void Window:setSize(int x, int y)
-		{
-		if (!fullScreen)
-			{
-			currentWidth = x
-			currentHeight = y
-
-			windowedWidth = currentWidth
-			windowedHeight = currentHeight
-			
-			canvas.setSize(x, y)
-			}
-			else
-			{
-			WH sz = canvas.getResolution()
-			currentWidth = sz.width
-			currentHeight = sz.height
-			}
-
-		paint(null)
-		}
-
-	WH Window:getSize()
-		{
-		return new WH(currentWidth, currentHeight)
-		}
-	
-	PixelMap Window:getPixels()
-		{
-		return canvas.getPixels()
 		}
 
 	void Window:close()
@@ -330,6 +218,17 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 			
 			closed = true
 			}
+		}
+
+	void Window:waitForClose()
+		{
+		mutex(closeLock)
+			{
+			if (closed) return
+			waitThread = this.thread
+			}
+		
+		this.thread.wait()
 		}
 
 	void Window:addObject(GraphicsObject go)
@@ -352,8 +251,6 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 		if (go hastype XYMouseObject)
 			{
 			addMouseEventTarget(go)
-			XYMouseObject mo = go
-			sinkevent CursorEvents(mo)
 			}
 
 		if (go hastype KeyEventObject)
@@ -391,11 +288,7 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 					remClickTarget(go)
 
 				if (go hastype XYMouseObject)
-					{
 					remMouseEventTarget(go)
-					XYMouseObject mo = go
-					stopevent CursorEvents(mo)
-					}
 
 				break
 				}
@@ -525,6 +418,36 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 			}
 		}
 
+	void Window:setPosition(int x, int y)
+		{
+		currentX = x
+		currentY = y
+		canvas.setPosition(x, y)
+		}
+
+	void Window:setSize(int x, int y)
+		{
+		if (!fullScreen)
+			{
+			currentWidth = x
+			currentHeight = y
+			canvas.setSize(x, y)
+			}
+			else
+			{
+			WH sz = canvas.getResolution()
+			currentWidth = sz.width
+			currentHeight = sz.height
+			}
+
+		paint(null)
+		}
+
+	WH Window:getSize()
+		{
+		return new WH(currentWidth, currentHeight)
+		}
+
 	Rect Window:getRect()
 		{
 		return new Rect(currentX, currentY, currentWidth, currentHeight)
@@ -549,15 +472,12 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 		{
 		mutex(paintLock)
 			{
-			if (repaintOn)
+			for (GraphicsItem bi = buffer; bi != null; bi = bi.next)
 				{
-				for (GraphicsItem bi = buffer; bi != null; bi = bi.next)
-					{
-					bi.object.paint(canvas)
-					}
+				bi.object.paint(canvas)
 				}
 
-			canvas.rectOutline(new Rect2D(0, 0, currentWidth, currentHeight, borderColor))
+			canvas.drawRectOutline(new Rect2D(0, 0, currentWidth, currentHeight, borderColor))
 
 			if (contextMenu != null)
 				{
@@ -636,24 +556,6 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 				}
 			}
 		}
-	
-	void multiClick(int x, int y, int button, int clicks)
-		{
-		for (ClickableItem ci = clickItems; ci != null; ci = ci.next)
-			{
-			Rect r = ci.object.getBounds()
-
-			if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
-				{
-				if (clickDown === ci.object)
-					{
-					ci.object.clickMulti(x - r.x, y - r.y, button, clicks)
-					}
-
-				break
-				}
-			}
-		}
 
 	void Window:mouseDown(int x, int y, int button)
 		{
@@ -700,151 +602,102 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 			}
 		}
 
-	void mouseUpClick(int x, int y, int button, int clicks)
-		{
-		if (clickDown !== null)
-			{
-			if (clickDown hastype XYMouseObject)
-				{
-				XYMouseObject co = clickDown
-				Rect r = co.getBounds()
-				co.mouseUp(x - r.x, y - r.y, button)
-				}
-			}
-			else
-			{
-			for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
-				{
-				Rect r = ci.object.getBounds()
-
-				if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
-					{
-					//we only register a mouse-up if this was the thing that got the mouse-down
-
-					if (ci === clickDown)
-						{
-						ci.object.mouseUp(x - r.x, y - r.y, button)
-						}
-						else if (clickDown hastype XYMouseObject)
-						{
-						XYMouseObject co = clickDown
-						r = co.getBounds()
-						co.mouseUp(x - r.x, y - r.y, button)
-						}
-					
-					break
-					}
-				}
-			}
-		
-		if (clicks == 1)
-			click(x, y, button)
-			else
-			multiClick(x, y, button, clicks)
-		
-		clickDown = null
-		}
-	
 	void Window:mouseUp(int x, int y, int button)
 		{
+		for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
+			{
+			Rect r = ci.object.getBounds()
+
+			if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
+				{
+				//we only register a mouse-up if this was the thing that got the mouse-down
+				if (ci === clickDown)
+					{
+					ci.object.mouseUp(x - r.x, y - r.y, button)
+					}
+					else if (clickDown hastype XYMouseObject)
+					{
+					XYMouseObject co = clickDown
+					r = co.getBounds()
+					co.mouseUp(x - r.x, y - r.y, button)
+					}
+				
+				break
+				}
+			}
+		
+		click(x, y, button)
+		
+		clickDown = null
 		}
 
 	void Window:mouseMove(int x, int y)
 		{
-		if (clickDown !== null)
+		mouseX = x
+		mouseY = y
+
+		bool overSomething
+
+		if (contextMenu != null)
 			{
-			if (clickDown hastype XYMouseObject)
+			Rect r = contextMenu.getBounds()
+
+			if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
 				{
-				XYMouseObject co = clickDown
-				Rect r = co.getBounds()
-				if (x < r.x) x = r.x
-				if (y < r.y) y = r.y
-				co.mouseMove(x - r.x, y - r.y)
-				}
-			}
-			else
-			{
-			mouseX = x
-			mouseY = y
-
-			bool overSomething
-
-			if (contextMenu != null)
-				{
-				Rect r = contextMenu.getBounds()
-
-				if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
+				if (mouseOver !== contextMenu)
 					{
-					if (mouseOver !== contextMenu)
+					if (mouseOver != null)
 						{
-						if (mouseOver != null)
-							{
-							mouseOver.mouseOut()
-
-							if (!cursorOverride) canvas.setCursor(IOWindow.CURSOR_DEFAULT)
-							baseCursor = null
-							}
-
-						mouseOver = contextMenu
-						mouseOver.mouseOver()
+						mouseOver.mouseOut()
 						}
 
-					overSomething = true
-
-					contextMenu.mouseMove(x - r.x, y - r.y)
+					mouseOver = contextMenu
+					mouseOver.mouseOver()
 					}
 
-				if (!overSomething && mouseOver != null)
-					{
-					mouseOver.mouseOut()
-					if (!cursorOverride) canvas.setCursor(IOWindow.CURSOR_DEFAULT)
-					baseCursor = null
-					mouseOver = null
-					}
+				overSomething = true
 
-				return
-				}
-
-			for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
-				{
-				Rect r = ci.object.getBounds()
-
-				if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
-					{
-					if (mouseOver !== ci.object)
-						{
-						if (mouseOver != null)
-							{
-							mouseOver.mouseOut()
-							}
-
-						mouseOver = ci.object
-						mouseOver.mouseOver()
-						}
-
-					overSomething = true
-
-					ci.object.mouseMove(x - r.x, y - r.y)
-
-					break
-					}
+				contextMenu.mouseMove(x - r.x, y - r.y)
 				}
 
 			if (!overSomething && mouseOver != null)
 				{
 				mouseOver.mouseOut()
-				if (!cursorOverride) canvas.setCursor(IOWindow.CURSOR_DEFAULT)
-				baseCursor = null
 				mouseOver = null
 				}
+
+			return
 			}
-		}
-	
-	void Window:mouseWheel(int xAdd, int xSub, int yAdd, int ySub)
-		{
-		if (mouseOver != null)
+
+		for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
 			{
-			mouseOver.mouseWheel(xAdd, xSub, yAdd, ySub)
+			Rect r = ci.object.getBounds()
+
+			if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
+				{
+				if (mouseOver !== ci.object)
+					{
+					if (mouseOver != null)
+						{
+						mouseOver.mouseOut()
+						}
+
+					mouseOver = ci.object
+					mouseOver.mouseOver()
+					}
+
+				overSomething = true
+
+				ci.object.mouseMove(x - r.x, y - r.y)
+
+				break
+				}
+			}
+
+		if (!overSomething && mouseOver != null)
+			{
+			mouseOver.mouseOut()
+			mouseOver = null
 			}
 		}
 	
@@ -883,7 +736,7 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 		{
 		//capture key state, for hot keys
 		int kCode
-		if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.OTHER)
+		if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.UNKNOWN)
 			{
 			if (kCode == KeyCode.SHIFT_LEFT || kCode == KeyCode.SHIFT_RIGHT)
 				{
@@ -923,7 +776,7 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 		{
 		//capture key state, for hot keys
 		int kCode
-		if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.OTHER)
+		if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.UNKNOWN)
 			{
 			if (kCode == KeyCode.SHIFT_LEFT || kCode == KeyCode.SHIFT_RIGHT)
 				{
@@ -971,14 +824,6 @@ component provides Window requires io.Output out, data.IntUtil iu, IOWindow, ui.
 	void Window:loseFocus()
 		{
 
-		}
-	
-	void Window:setRepaint(bool b)
-		{
-		repaintOn = b
-
-		if (repaintOn)
-			postRepaint()
 		}
 
 	}

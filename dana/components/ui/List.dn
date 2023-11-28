@@ -105,12 +105,11 @@ component provides List requires ui.Font, io.Output out {
 	
 	void List:paint(Canvas c)
 		{
-		int startX = xPosition
-		int startY = yPosition
-		
-		c.rect(new Rect2D(xPosition, yPosition, width, preferredSize.height-ITEM_GAP, bgColor))
+		c.pushSurface(new Rect(xPosition, yPosition, width, preferredSize.height-ITEM_GAP), 0, 0, 255)
 
-		int nextItemY = yPosition
+		c.drawRect(new Rect2D(0, 0, width, preferredSize.height-ITEM_GAP, bgColor))
+
+		int nextItemY = 0
 		for (int i = 0; i < listItems.arrayLength; i++)
 			{
 			if (filterList == null || isIn(filterList, i))
@@ -120,12 +119,14 @@ component provides List requires ui.Font, io.Output out {
 				if (selectedItem != null && i == selectedIndex)
 					nextColor = selectedColor
 
-				c.rect(new Rect2D(xPosition, nextItemY, width, ITEM_HEIGHT, nextColor))
-				c.text(new Point2D(xPosition+10, nextItemY, new Color(0, 0, 0, 255)), textFont, listItems[i].label)
+				c.drawRect(new Rect2D(0, nextItemY, width, ITEM_HEIGHT, nextColor))
+				c.drawText(new Point2D(10, nextItemY, new Color(0, 0, 0, 255)), textFont, listItems[i].label)
 
 				nextItemY += (ITEM_HEIGHT+ITEM_GAP)
 				}
 			}
+
+		c.popSurface()
 		}
 
 	char[] List:getSelectedItem()

@@ -1,5 +1,3 @@
-uses IOWindow
-
 data GraphicsItem{
 	GraphicsObject object
 	GraphicsItem next
@@ -18,7 +16,7 @@ data XYListener{
 	XYListener prev
 	}
 
-component provides Panel requires io.Output out, data.IntUtil iu {
+component provides Panel requires io.Output out {
 
 	GraphicsItem objects
 	GraphicsItem lastObject
@@ -35,7 +33,7 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 	GraphicsObject clickDown
 
 	bool backgroundSet
-	Color backgroundColor = new Color(220, 220, 230, 255)
+	Color backgroundColor = new Color(190, 190, 200, 255)
 	
 	HotKey focusHotKeys[]
 	KeyEventObject keyboardFocus
@@ -68,20 +66,9 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 			emitevent contextMenuOff()
 			}
 		}
-	
-	eventsink CursorEvents(EventData ed)
-		{
-		if (ed.type == XYMouseObject.[setCursor])
-			{
-			CursorSetEvent cse = ed.details
-
-			emitevent setCursor(cse)
-			}
-		}
 
 	Panel:Panel()
 		{
-		repaintOn = true
 		}
 	
 	void Panel:setFocus()
@@ -118,21 +105,18 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 
 	void Panel:paint(Canvas c)
 		{
-		if (repaintOn)
+		//occlude contents at panel boundary
+		c.pushSurface(new Rect(xPosition, yPosition, width, height), 0, 0, 255)
+
+		//background
+		c.drawRect(new Rect2D(0, 0, width, height, backgroundColor))
+
+		for (GraphicsItem gi = objects; gi != null; gi = gi.next)
 			{
-			//occlude contents at panel boundary
-			c.pushSurface(new Rect(xPosition, yPosition, width, height), 0, 0, 255)
-
-			//background
-			c.rect(new Rect2D(0, 0, width, height, backgroundColor))
-
-			for (GraphicsItem gi = objects; gi != null; gi = gi.next)
-				{
-				gi.object.paint(c)
-				}
-
-			c.popSurface()
+			gi.object.paint(c)
 			}
+
+		c.popSurface()
 		}
 
 	void Panel:addObject(GraphicsObject go)
@@ -151,11 +135,7 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 			addClickTarget(go)
 
 		if (go hastype XYMouseObject)
-			{
 			addMouseEventTarget(go)
-			XYMouseObject mo = go
-			sinkevent CursorEvents(mo)
-			}
 
 		if (go hastype KeyEventObject)
 			{
@@ -194,11 +174,7 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 			remClickTarget(go)
 
 		if (go hastype XYMouseObject)
-			{
 			remMouseEventTarget(go)
-			XYMouseObject mo = go
-			stopevent CursorEvents(mo)
-			}
 
 		postRepaint()
 		}
@@ -303,21 +279,6 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 
 	void Panel:click(int x, int y, int button)
 		{
-		}
-	
-	void Panel:clickMulti(int x, int y, int button, int clicks)
-		{
-		for (ClickableItem ci = clickObjects; ci != null; ci = ci.next)
-			{
-			Rect r = ci.object.getBounds()
-
-			if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
-				{
-				ci.object.clickMulti(x - r.x, y - r.y, button, clicks)
-				
-				break
-				}
-			}
 		}
 	
 	void Panel:hotKeyClick(HotKey h)
@@ -467,36 +428,24 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 
 	void Panel:mouseUp(int x, int y, int button)
 		{
-		if (clickDown !== null)
+		for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
 			{
-			if (clickDown hastype XYMouseObject)
-				{
-				XYMouseObject co = clickDown
-				Rect r = co.getBounds()
-				co.mouseUp(x - r.x, y - r.y, button)
-				}
-			}
-			else
-			{
-			for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
-				{
-				Rect r = ci.object.getBounds()
+			Rect r = ci.object.getBounds()
 
-				if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
+			if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
+				{
+				//we only register a mouse-up if this was the thing that got the mouse-down
+				if (ci === clickDown)
 					{
-					//we only register a mouse-up if this was the thing that got the mouse-down
-					if (ci === clickDown)
-						{
-						ci.object.mouseUp(x - r.x, y - r.y, button)
-						}
-						else if (clickDown hastype XYMouseObject)
-						{
-						XYMouseObject co = clickDown
-						r = co.getBounds()
-						co.mouseUp(x - r.x, y - r.y, button)
-						}
-					break
+					ci.object.mouseUp(x - r.x, y - r.y, button)
 					}
+					else if (clickDown hastype XYMouseObject)
+					{
+					XYMouseObject co = clickDown
+					r = co.getBounds()
+					co.mouseUp(x - r.x, y - r.y, button)
+					}
+				break
 				}
 			}
 		
@@ -507,61 +456,37 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 
 	void Panel:mouseMove(int x, int y)
 		{
-		if (clickDown !== null)
-			{
-			if (clickDown hastype XYMouseObject)
-				{
-				XYMouseObject co = clickDown
-				Rect r = co.getBounds()
-				if (x < r.x) x = r.x
-				if (y < r.y) y = r.y
-				co.mouseMove(x - r.x, y - r.y)
-				}
-			}
-			else
-			{
-			bool overSomething
+		bool overSomething
 
-			for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
-				{
-				Rect r = ci.object.getBounds()
+		for (XYListener ci = mouseListeners; ci != null; ci = ci.next)
+			{
+			Rect r = ci.object.getBounds()
 
-				if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
+			if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
+				{
+				if (mouseOver !== ci.object)
 					{
-					if (mouseOver !== ci.object)
+					if (mouseOver != null)
 						{
-						if (mouseOver != null)
-							{
-							mouseOver.mouseOut()
-							emitevent setCursor(new CursorSetEvent(IOWindow.CURSOR_DEFAULT))
-							}
-
-						mouseOver = ci.object
-						mouseOver.mouseOver()
+						mouseOver.mouseOut()
 						}
 
-					overSomething = true
-
-					ci.object.mouseMove(x - r.x, y - r.y)
-
-					break
+					mouseOver = ci.object
+					mouseOver.mouseOver()
 					}
-				}
 
-			if (!overSomething && mouseOver != null)
-				{
-				mouseOver.mouseOut()
-				emitevent setCursor(new CursorSetEvent(IOWindow.CURSOR_DEFAULT))
-				mouseOver = null
+				overSomething = true
+
+				ci.object.mouseMove(x - r.x, y - r.y)
+
+				break
 				}
 			}
-		}
-	
-	void Panel:mouseWheel(int xAdd, int xSub, int yAdd, int ySub)
-		{
-		if (mouseOver != null)
+
+		if (!overSomething && mouseOver != null)
 			{
-			mouseOver.mouseWheel(xAdd, xSub, yAdd, ySub)
+			mouseOver.mouseOut()
+			mouseOver = null
 			}
 		}
 	
@@ -594,14 +519,6 @@ component provides Panel requires io.Output out, data.IntUtil iu {
 		{
 		disabled = d
 		postRepaint()
-		}
-	
-	void Panel:setRepaint(bool b)
-		{
-		repaintOn = b
-
-		if (repaintOn)
-			postRepaint()
 		}
 
 	}

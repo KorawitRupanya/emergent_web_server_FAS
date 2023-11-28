@@ -3,7 +3,7 @@ data Item {
 	Item next
 	}
 
-component provides StringBuilder(AdaptEvents) {
+component provides StringBuilder {
 	
 	Item list
 	Item last
@@ -43,22 +43,6 @@ component provides StringBuilder(AdaptEvents) {
 			}
 		
 		return result
-		}
-	
-	void AdaptEvents:active()
-		{
-		list = null
-		last = null
-		
-		add(builderContent)
-		length = builderContent.arrayLength
-		
-		builderContent = null
-		}
-	
-	void AdaptEvents:inactive()
-		{
-		builderContent = get()
 		}
 	
 	}

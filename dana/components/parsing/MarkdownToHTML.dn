@@ -17,7 +17,7 @@ component provides MarkdownToHTML requires data.IntUtil iu, data.StringBuilder, 
 				tokeniser.setBlockComment(style.blockComment[0].string, style.blockComment[1].string)
 			
 			//use parsing.Tokeniser to help...
-			ParseToken tokens[] = tokeniser.tokenise(src).tokens
+			ParseToken tokens[] = tokeniser.tokenise(src)
 			
 			int offset = 0
 			for (int i = 0; i < tokens.arrayLength; i++)
@@ -66,10 +66,8 @@ component provides MarkdownToHTML requires data.IntUtil iu, data.StringBuilder, 
 			}
 		}
 	
-	int docToHTML(MDElement doc, MDCodeStyle codeStyling[], StringBuilder bld, int anchorCount)
+	void docToHTML(MDElement doc, MDCodeStyle codeStyling[], StringBuilder bld)
 		{
-		int aci = 0
-
 		if (doc.type == MDElement.PARAGRAPH)
 			{
 			bld.add("<p>")
@@ -112,12 +110,9 @@ component provides MarkdownToHTML requires data.IntUtil iu, data.StringBuilder, 
 			}
 			else if (doc.type == MDElement.HEADING)
 			{
-			bld.add("<h$(doc.extType) id = \"anchor$anchorCount\">")
+			bld.add("<h$(doc.extType)>")
 			bld.add(doc.content)
 			bld.add("</h$(doc.extType)>")
-			
-			anchorCount ++
-			aci ++
 			}
 			else if (doc.type == MDElement.LIST_UNORDERED)
 			{
@@ -156,7 +151,7 @@ component provides MarkdownToHTML requires data.IntUtil iu, data.StringBuilder, 
 		
 		for (int i = 0; i < doc.children.arrayLength; i++)
 			{
-			anchorCount += docToHTML(doc.children[i], codeStyling, bld, anchorCount)
+			docToHTML(doc.children[i], codeStyling, bld)
 			}
 		
 		if (doc.type == MDElement.PARAGRAPH)
@@ -183,58 +178,12 @@ component provides MarkdownToHTML requires data.IntUtil iu, data.StringBuilder, 
 			{
 			bld.add("</blockquote>")
 			}
-		
-		return aci
 		}
 	
-	int makeTOC(MDElement doc, StringBuilder bld, int anchorCount)
-		{
-		int aci = 0
-		if (doc.type == MDElement.HEADING)
-			{
-			bld.add("<p><a href = \"#anchor$anchorCount\">$(doc.content)</a></p>")
-			anchorCount ++
-			aci ++
-			}
-
-		for (int i = 0; i < doc.children.arrayLength; i++)
-			{
-			anchorCount += makeTOC(doc.children[i], bld, anchorCount)
-			}
-		
-		return aci
-		}
-	
-	void makeTOCHTML(MDElement doc, StringBuilder sbld, char tocStyling[])
-		{
-		StringBuilder tocBuild = new StringBuilder()
-		makeTOC(doc, tocBuild, 0)
-		char toc[] = tocBuild.get()
-		if (toc.arrayLength > 0)
-			{
-			sbld.add("<div class = \"$tocStyling\">")
-			sbld.add(toc)
-			sbld.add("</div>")
-			}
-		}
-
-	char[] MarkdownToHTML:process(MDElement doc, opt char mainDivClass[], MDCodeStyle codeStyling[], bool generateTOC, bool tocFirst, char tocDivClass[])
+	char[] MarkdownToHTML:process(MDElement doc, opt MDCodeStyle codeStyling[])
 		{
 		StringBuilder sbld = new StringBuilder()
-
-		if (generateTOC && tocFirst)
-			{
-			makeTOCHTML(doc, sbld, tocDivClass)
-			}
-
-		if (mainDivClass != null) sbld.add("<div class = \"$mainDivClass\">")
-		docToHTML(doc, codeStyling, sbld, 0)
-		if (mainDivClass != null)  sbld.add("</div>")
-		
-		if (generateTOC && !tocFirst)
-			{
-			makeTOCHTML(doc, sbld, tocDivClass)
-			}
+		docToHTML(doc, codeStyling, sbld)
 		
 		return sbld.get()
 		}

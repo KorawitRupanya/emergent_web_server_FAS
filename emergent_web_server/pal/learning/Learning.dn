@@ -214,7 +214,7 @@ component provides learning.Learning requires io.Output out, data.IntUtil iu, ti
 			dec metricValue = value/count
 			result = new char[](result, "response time: ", du.decToString(metricValue), " ms")
 		} else {
-			out.println("$(debugMSG) ERROR: No perception data. learn")
+			out.println("$(debugMSG) ERROR: No perception data.")
 			return null
 		}
 		return result

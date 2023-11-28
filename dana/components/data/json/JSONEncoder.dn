@@ -139,7 +139,7 @@ component provides JSONEncoder requires data.IntUtil iu, data.DecUtil du, util.T
 		char json[] = null
 		for (int i = 0; i < d.arrayLength; i++) {
 			if (i > 0) { json = new char[](json, ", ") }
-			json = new char[](json, du.makeString(d[i]))
+			json = new char[](json, du.decToString(d[i]))
 		}
 		return json
 	}
@@ -207,7 +207,7 @@ component provides JSONEncoder requires data.IntUtil iu, data.DecUtil du, util.T
 				else { json = new char[](json, "\"", t.fields[i].name, "\": null") }
 			} else if (fieldType == DECIMAL) {
 				dec helper = d:.tf
-				if (helper != null) { json = new char[](json, "\"", dataVarToJsonKey(t.fields[i].name, map), "\": ", du.makeString(helper)) }
+				if (helper != null) { json = new char[](json, "\"", dataVarToJsonKey(t.fields[i].name, map), "\": ", du.decToString(helper)) }
 				else { json = new char[](json, "\"", t.fields[i].name, "\": 0.0") }
 			} else if (fieldType == INTEGER) {
 				int helper = d:.tf
@@ -262,14 +262,14 @@ component provides JSONEncoder requires data.IntUtil iu, data.DecUtil du, util.T
 		return json
 	}
 
-	Data[] JSONEncoder:jsonToArray(char json[], Type t, opt Map map[]) {
+	Data[] JSONEncoder:jsonToArray(char json[], Type t, Map map[]) {
 		if (t.class == Type.ARRAY) {
 			return getArray(t, parser.parseDocument(json), map)
 		} else { throw new Exception("JSON cannot be converted into the given data type.") }
 		return null
 	}
 
-	Data JSONEncoder:jsonToData(char json[], Type t, opt Map map[]) {
+	Data JSONEncoder:jsonToData(char json[], Type t, Map map[]) {
 		if (t.class == Type.DATA) {
 			Data d = new Data() from t
 			JSONElement e = parser.parseDocument(json)
@@ -278,7 +278,7 @@ component provides JSONEncoder requires data.IntUtil iu, data.DecUtil du, util.T
 		return null
 	}
 
-	char[] JSONEncoder:jsonFromArray(Data d[], opt Map map[]) {
+	char[] JSONEncoder:jsonFromArray(Data d[], Map map[]) {
 		Type t = typeof(d)
 		char json[] = null
 		if (t.class == Type.ARRAY) {
@@ -287,7 +287,7 @@ component provides JSONEncoder requires data.IntUtil iu, data.DecUtil du, util.T
 		return json
 	}
 
-	char[] JSONEncoder:jsonFromData(Data d, opt Map map[]) {
+	char[] JSONEncoder:jsonFromData(Data d, Map map[]) {
 		Type t = typeof(d)
 		char json[] = null
 		if (t.class == Type.DATA) {

@@ -2,11 +2,7 @@
 Timer component
 */
 
-interface TimerLib {
-	void sleep(int ms)
-}
-
-component provides time.Timer requires native TimerLib lib
+component provides time.Timer requires native time.Timer lib
 	{
 	void Timer:sleep(int sms)
 		{

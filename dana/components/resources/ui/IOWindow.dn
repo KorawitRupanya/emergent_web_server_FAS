@@ -7,7 +7,6 @@ uses media.WH
 uses Font
 uses Rect
 uses Point
-uses Cursor
 
 data MouseEvent	{
 	int type
@@ -15,9 +14,6 @@ data MouseEvent	{
 	int button
 	int x
 	int y
-
-	int exd1
-	int exd2
 	}
 
 data KeyEvent {
@@ -35,23 +31,10 @@ data DropEvent {
 */
 
 interface IOWindow extends Canvas {
-
-	const byte CURSOR_DEFAULT = 0
-	const byte CURSOR_HIDDEN = 1
-	const byte CURSOR_CUSTOM = 2
-	const byte CURSOR_IBEAM = 3
-	const byte CURSOR_HAND = 4
-	const byte CURSOR_WAIT = 5
-	const byte CURSOR_SIZENS = 6
-	const byte CURSOR_SIZEWE = 7
-	const byte CURSOR_SIZENWSE = 8
-	const byte CURSOR_SIZENESW = 9
-	const byte CURSOR_SIZEALL = 10
 	
 	event mouseUp(MouseEvent m)
 	event mouseDown(MouseEvent m)
 	event mouseMove(MouseEvent m)
-	event mouseWheel(MouseEvent m)
 	event keyUp(KeyEvent k)
 	event keyDown(KeyEvent k)
 	event fileDrop(DropEvent d)
@@ -85,18 +68,12 @@ interface IOWindow extends Canvas {
 	
 	/* {"@description" : "Set the background color of the window."} */
 	void setBackground(store Color c)
-
-	/* {"@description" : "Set the current mouse cursor of the window."} */
-	void setCursor(byte cursorType, opt Cursor c)
 	
 	/* {"@description" : "Get the screen resolution of the display on which the window resides."} */
 	WH getResolution()
 	
 	/* {"@description" : "Repaint the window and its contents."} */
 	void paint()
-
-	/* {"@description" : "Get the window's rendered content as a pixel map."} */
-	PixelMap getPixels()
 	
 	/* {"@description" : "Close the window (other functions on this API will not work after this)."} */
 	void close()
