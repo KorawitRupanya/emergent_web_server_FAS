@@ -1,6 +1,6 @@
-Group: 2_3_Emergent Web Server_NU-5B51-Collaborative_Jorit-Rishikesh
+**Group: 2_3_Emergent Web Server_NU-5B51-Collaborative_Jorit-Rishikesh
 
-Quick Start
+Quick Start**
 
 On your terminal, build the Image:
 
@@ -22,11 +22,11 @@ $ docker exec -it ews bash
 
 After typing this command on your terminal, you should get a terminal inside the container. To execute the tool to interact with EWS, type:
 
-# cd pal/
+$ cd pal/
 
 It should go inside the emergent_web_server/pal folder. Now type the command below:
 
-# dana -sp ../repository InteractiveEmergentSys.o
+$ dana -sp ../repository InteractiveEmergentSys.o
 
 Interactive Emergent System
 The interactive tool launches EWS. We ask the user to be patient as this may take a little while to start and configure EWS's 42 unique compositions. Once EWS is executing, you'll get access to a command prompt. To access all available commands to interact with EWS API, type:
@@ -65,14 +65,14 @@ After providinng the learning algorithm with the requested information, the prom
 $ docker exec -it ews bash
 then
 
-# cd ws_clients/
+$ cd ws_clients/
 
 Then list, choose and execute the client scripts:
 
-# ls
+$ ls
 
 For listing the folder's content. The following command executes one of the client scripts:
 
-# dana ClientImagePattern.o
+$ dana ClientImagePattern.o
 
 Once the client is executing, the user can go back to the previous terminal where the InteractiveEmergentSys.o is executing and press [ENTER] to start learning. The learning process will take a little over 3.5 min (if the arguments are 5000 for the observation window, 3 for the exploration threshold and 52 for the number of rounds). The learning algorithm prints the composition it is exploring and the average response time of that particular composition during execution. After exploration phase, the algorithm selects the composition that presented the lowest response time.
