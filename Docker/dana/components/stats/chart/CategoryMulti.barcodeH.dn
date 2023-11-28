@@ -13,7 +13,7 @@ data Series {
 
 data Bar {
 	char category[]
-	Sample samples[]
+	List samples
 	}
 
 //marker length in pixels (the "ticks" on the axes)
@@ -24,7 +24,7 @@ const int MARKER_SIZE = 7
 const int LEGEND_SQ_SIZE = 10
 const int LEGEND_PAD_SIZE = 5
 
-component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stcore, io.Output out, data.IntUtil iu, data.DecUtil du, ui.Font, data.query.Search search {
+component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stcore, io.Output out, data.IntUtil iu, data.DecUtil du, ui.Font, data.query.Search search, data.adt.List {
 	
 	Series series[]
 	Bar categories[]
@@ -60,6 +60,13 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 	
 	bool showStdDev
 	bool showLegend
+
+	byte legendPosition = CategoryMulti.L_INSIDE
+	byte legendModX = 0
+	byte legendModY = 10
+
+	int originWidth = 0
+	int originHeight = 0
 	
 	CategoryMulti:CategoryMulti()
 		{
@@ -70,28 +77,50 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 		setYMarkerInterval(1.0)
 		}
 	
-	void CategoryMulti:addSeries(char name[])
+	void CategoryMulti:setSize(int w, int h)
 		{
-		if (series.search(Series.[name], new Series(name)) == null)
-			series = new Series[](series, new Series(name, name, new Color(100, 200, 200, 255)))
+		originWidth = w
+		originHeight = h
+		
+		if (legendPosition == CategoryMulti.L_OUTSIDE)
+			{
+			int q = getLongestSeriesName() + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE
+			w -= q
+			}
+
+		super(w, h)
 		}
 	
-	void CategoryMulti:addSample(char seriesName[], char cat[], dec yvalues[])
+	void CategoryMulti:addSeries(char name[], opt store Color color)
+		{
+		if (color == null) color = new Color(100, 200, 200, 255)
+
+		if (series.find(Series.[name], new Series(name)) == null)
+			series = new Series[](series, new Series(name, name, color))
+		}
+	
+	void CategoryMulti:addSample(char seriesName[], char cat[], dec yvalues[], opt bool redraw)
 		{
 		Bar bar = null
+
+		Series n = series.findFirst(Series.[name], new Series(seriesName))
+
+		if (n == null)
+			{
+			throw new Exception("unknown series '$seriesName'; series must first be added using addSeries()")
+			}
 		
 		if ((bar = categories.findFirst(Bar.[category], new Bar(cat))) == null)
 			{
 			bar = new Bar(cat)
+			bar.samples = new List()
 			categories = new Bar[](categories, bar)
 			}
 		
-		Series n = series.findFirst(Series.[name], new Series(seriesName))
-		
 		//add sample
-		bar.samples = new Sample[](bar.samples, new Sample(yvalues, n))
+		bar.samples.add(new Sample(yvalues, n))
 		
-		postRepaint()
+		if (redraw) postRepaint()
 		}
 	
 	void CategoryMulti:setYMinMax(dec min, dec max)
@@ -138,6 +167,17 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 		showLegend = on
 		}
 	
+	void CategoryMulti:setLegendPosition(byte type, opt int x, int y)
+		{
+		legendPosition = type
+		if (isset x) legendModX = x
+		if (isset y) legendModY = y
+
+		setSize(originWidth, originHeight)
+
+		postRepaint()
+		}
+	
 	void CategoryMulti:setAxisFont(Font f)
 		{
 		axisFont = f
@@ -157,14 +197,7 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 		barPad = pixels
 		}
 	
-	// -- custom rendering --
-	
-	void CategoryMulti:drawToCanvas(Canvas c)
-		{
-		paint(c)
-		}
-	
-	void prepAxisLimits()
+	bool prepAxisLimits()
 		{
 		dec highX
 		dec lowX
@@ -176,11 +209,12 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 			dec barTop = 0.0
 			dec barLow = 0.0
 			
-			for (int j = 0; j < categories[i].samples.arrayLength; j++)
+			int checked = 0
+			for (Sample s = categories[i].samples.getFirst(); s != null; s = categories[i].samples.getNext())
 				{
 				//add it to the bar, by going on to the top or below the bottom, depending on whether it's positive or negative...
 				
-				dec mean = stcore.mean(categories[i].samples[j].values)
+				dec mean = stcore.mean(s.values)
 				
 				if (mean > 0.0)
 					{
@@ -194,6 +228,8 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 					
 					barLow = botX
 					}
+				
+				checked ++
 				}
 			
 			if (barTop > highX) highX = barTop
@@ -202,8 +238,12 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 			highY += 1.0
 			}
 		
+		if (lowX == highX) return false
+
 		setXMinMax(lowX, highX)
 		setYMinMax(lowY, highY)
+
+		return true
 		}
 	
 	int getLongestSeriesName()
@@ -225,25 +265,30 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 		//calculate the longest series name, and offset the legend by this much from the right (plus the legend color square width)
 		int longestTxt = getLongestSeriesName()
 		
-		int yPos = 10
-		int xStart = getSize().width - (longestTxt + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE)
+		int yPos = legendModY
+		int xStart
+
+		if (legendPosition == CategoryMulti.L_INSIDE || legendPosition == CategoryMulti.L_OUTSIDE)
+			xStart = (originWidth - (longestTxt + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE)) + legendModX
+			else if (legendPosition == CategoryMulti.L_ABSOLUTE)
+			xStart = legendModX
 		
 		int textHeight = axisFont.getFontMetrics().height
 		
 		int totalLegendHeight = ((textHeight + 5) * (series.arrayLength-1)) + textHeight
 		int totalLegendWidth = (longestTxt + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE)
 		
-		c.drawRect(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), bgColor))
-		c.drawRectOutline(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), axisColor))
+		c.rect(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), bgColor))
+		c.rectOutline(new Rect2D(xStart - LEGEND_PAD_SIZE, yPos - LEGEND_PAD_SIZE, totalLegendWidth + (LEGEND_PAD_SIZE*2), totalLegendHeight + (LEGEND_PAD_SIZE*2), axisColor))
 		
 		yPos += (axisFont.getFontMetrics().descent)
 		
 		for (int i = series.arrayLength - 1; i != INT_MAX; i--)
 			{
-			c.drawRect(new Rect2D(xStart, yPos, LEGEND_SQ_SIZE, LEGEND_SQ_SIZE, series[i].seriesColor))
+			c.rect(new Rect2D(xStart, yPos, LEGEND_SQ_SIZE, LEGEND_SQ_SIZE, series[i].seriesColor))
 			
 			int yOffset = (yPos + (LEGEND_SQ_SIZE / 2)) - (textHeight / 2)
-			c.drawText(new Point2D(xStart + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE, yOffset, axisColor), axisFont, series[i].displayName)
+			c.text(new Point2D(xStart + LEGEND_SQ_SIZE + LEGEND_SQ_SIZE, yOffset, axisColor), axisFont, series[i].displayName)
 			
 			yPos += textHeight + 5
 			}
@@ -262,24 +307,24 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 		return high
 		}
 	
-	// -- screen rendering (temporary?) --
-	
 	void CategoryMulti:paint(Canvas c)
 		{
-		prepAxisLimits()
+		if (!prepAxisLimits())
+			{
+			throw new Exception("chart has no data to plot (min and max data point values are equal)")
+			}
 		
 		int maxCatWidth = getMaxCatTextWidth()
 		setAxisLabelSpace(ChartCore.AXIS_Y, maxCatWidth)
 		
 		Point pos = getPosition()
-		WH wh = getSize()
 		
-		c.pushSurface(new Rect(pos.x, pos.y, wh.width, wh.height), 0, 0, 255)
+		c.pushSurface(new Rect(pos.x, pos.y, originWidth, originHeight), 0, 0, 255)
 		
 		preparePlotArea()
 		
 		//background
-		c.drawRect(new Rect2D(0, 0, wh.width, wh.height, bgColor))
+		c.rect(new Rect2D(0, 0, originWidth, originHeight, bgColor))
 		
 		//grid lines, if any
 		drawGrid(c)
@@ -309,10 +354,8 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 			
 			int barOffset = (centreY - (barHeightPX / 2)) - xyZ1[1]
 			
-			for (int j = 0; j < categories[i].samples.arrayLength; j++)
+			for (Sample s = categories[i].samples.getFirst(); s != null; s = categories[i].samples.getNext())
 				{
-				Sample s = categories[i].samples[j]
-				
 				//add it to the bar, by going on to the top or below the bottom, depending on whether it's positive or negative...
 				
 				dec mean = stcore.mean(s.values)
@@ -324,7 +367,7 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 					int xyTop[] = getPlotPoint(topX, thisY)
 					int xyBot[] = getPlotPoint(barTop, thisY+1.0)
 					
-					c.drawRect(new Rect2D(xyBot[0], xyBot[1] + barOffset + barPad, xyTop[0] - xyBot[0], barHeightPX, s.series.seriesColor))
+					c.rect(new Rect2D(xyBot[0], xyBot[1] + barOffset + barPad, xyTop[0] - xyBot[0], barHeightPX, s.series.seriesColor))
 					
 					barTop = topX
 					}
@@ -335,7 +378,7 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 					int xyTop[] = getPlotPoint(barLow, thisY)
 					int xyBot[] = getPlotPoint(botX, thisY+1.0)
 					
-					c.drawRect(new Rect2D(xyBot[0], xyBot[1] + barOffset + barPad, xyTop[0] - xyBot[0], barHeightPX, s.series.seriesColor))
+					c.rect(new Rect2D(xyBot[0], xyBot[1] + barOffset + barPad, xyTop[0] - xyBot[0], barHeightPX, s.series.seriesColor))
 					
 					barLow = botX
 					}
@@ -344,7 +387,7 @@ component provides CategoryMulti:barcodeH requires ChartCore, stats.StatCore stc
 			//category label
 			int textWidth = axisFont.getTextWidth(categories[i].category)
 			int textHeight = axisFont.getFontMetrics().height
-			c.drawText(new Point2D(getPlotArea().x - MARKER_LENGTH - textWidth, centreY - (textHeight / 2), axisColor), axisFont, categories[i].category)
+			c.text(new Point2D(getPlotArea().x - MARKER_LENGTH - textWidth, centreY - (textHeight / 2), axisColor), axisFont, categories[i].category)
 			
 			thisY += 1.0
 			}

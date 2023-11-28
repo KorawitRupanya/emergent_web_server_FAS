@@ -42,7 +42,7 @@ component provides Series:line requires ChartCore, stats.StatCore stcore, io.Out
 		super()
 		}
 	
-	void Series:addSample(dec xv, dec yvalues[])
+	void Series:addSample(dec xv, dec yvalues[], opt bool redraw)
 		{
 		//update our highest and lowest X and Y points, to use in normalising coordinates
 		dec hy = stcore.max(yvalues)
@@ -77,7 +77,7 @@ component provides Series:line requires ChartCore, stats.StatCore stcore, io.Out
 		setXMinMax(xAxMin, xAxMax)
 		setYMinMax(yAxMin, yAxMax)
 		
-		postRepaint()
+		if (redraw) postRepaint()
 		}
 	
 	void Series:setXMinMax(dec min, dec max)
@@ -119,13 +119,6 @@ component provides Series:line requires ChartCore, stats.StatCore stcore, io.Out
 		
 		}
 	
-	// -- SVG rendering --
-	
-	void Series:drawToCanvas(Canvas c)
-		{
-		paint(c)
-		}
-	
 	void prepAxisLimits()
 		{
 		dec highX
@@ -161,8 +154,6 @@ component provides Series:line requires ChartCore, stats.StatCore stcore, io.Out
 		setYMinMax(lowY, highY)
 		}
 	
-	// -- screen rendering (temporary?) --
-	
 	void Series:paint(Canvas c)
 		{
 		prepAxisLimits()
@@ -175,7 +166,7 @@ component provides Series:line requires ChartCore, stats.StatCore stcore, io.Out
 		preparePlotArea()
 		
 		//graph background
-		c.drawRect(new Rect2D(0, 0, wh.width, wh.height, bgColor))
+		c.rect(new Rect2D(0, 0, wh.width, wh.height, bgColor))
 		
 		//plot area background (TODO)
 		
@@ -197,26 +188,26 @@ component provides Series:line requires ChartCore, stats.StatCore stcore, io.Out
 			
 			if (markerStyle == Series.M_SQUARE)
 				{
-				c.drawRect(new Rect2D(xy[0] - MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, MARKER_SIZE, MARKER_SIZE, seriesColor))
+				c.rect(new Rect2D(xy[0] - MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, MARKER_SIZE, MARKER_SIZE, seriesColor))
 				}
 				else if (markerStyle == Series.M_SQUARE_OUTLINE)
 				{
-				c.drawRectOutline(new Rect2D(xy[0] - MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, MARKER_SIZE, MARKER_SIZE, seriesColor))
+				c.rectOutline(new Rect2D(xy[0] - MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, MARKER_SIZE, MARKER_SIZE, seriesColor))
 				}
 				else if (markerStyle == Series.M_PLUS)
 				{
-				c.drawLine(new Line2D(xy[0], xy[1] - MARKER_SIZE/2, xy[0], xy[1] + MARKER_SIZE/2, seriesColor))
-				c.drawLine(new Line2D(xy[0] - MARKER_SIZE/2, xy[1], xy[0] + MARKER_SIZE/2, xy[1], seriesColor))
+				c.line(new Line2D(xy[0], xy[1] - MARKER_SIZE/2, xy[0], xy[1] + MARKER_SIZE/2, seriesColor))
+				c.line(new Line2D(xy[0] - MARKER_SIZE/2, xy[1], xy[0] + MARKER_SIZE/2, xy[1], seriesColor))
 				}
 				else if (markerStyle == Series.M_CROSS)
 				{
-				c.drawLine(new Line2D(xy[0] - MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, xy[0] + MARKER_SIZE/2, xy[1] + MARKER_SIZE/2, seriesColor))
-				c.drawLine(new Line2D(xy[0] - MARKER_SIZE/2, xy[1] + MARKER_SIZE/2, xy[0] + MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, seriesColor))
+				c.line(new Line2D(xy[0] - MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, xy[0] + MARKER_SIZE/2, xy[1] + MARKER_SIZE/2, seriesColor))
+				c.line(new Line2D(xy[0] - MARKER_SIZE/2, xy[1] + MARKER_SIZE/2, xy[0] + MARKER_SIZE/2, xy[1] - MARKER_SIZE/2, seriesColor))
 				}
 			
 			if (i > 0)
 				{
-				c.drawLine(new Line2D(lastX, lastY, xy[0], xy[1], seriesColor))
+				c.line(new Line2D(lastX, lastY, xy[0], xy[1], seriesColor))
 				}
 			
 			if (showStdDev)
@@ -228,10 +219,10 @@ component provides Series:line requires ChartCore, stats.StatCore stcore, io.Out
 					int xyHigh[] = getPlotPoint(thisX, thisY+stdDev)
 					int xyLow[] = getPlotPoint(thisX, thisY-stdDev)
 					
-					c.drawLine(new Line2D(xyHigh[0], xyHigh[1], xyLow[0], xyLow[1], seriesColor))
+					c.line(new Line2D(xyHigh[0], xyHigh[1], xyLow[0], xyLow[1], seriesColor))
 					
-					c.drawLine(new Line2D(xyHigh[0]-MARKER_SIZE/2, xyHigh[1], xyHigh[0]+MARKER_SIZE/2, xyHigh[1], seriesColor))
-					c.drawLine(new Line2D(xyLow[0]-MARKER_SIZE/2, xyLow[1], xyLow[0]+MARKER_SIZE/2, xyLow[1], seriesColor))
+					c.line(new Line2D(xyHigh[0]-MARKER_SIZE/2, xyHigh[1], xyHigh[0]+MARKER_SIZE/2, xyHigh[1], seriesColor))
+					c.line(new Line2D(xyLow[0]-MARKER_SIZE/2, xyLow[1], xyLow[0]+MARKER_SIZE/2, xyLow[1], seriesColor))
 					}
 				}
 			

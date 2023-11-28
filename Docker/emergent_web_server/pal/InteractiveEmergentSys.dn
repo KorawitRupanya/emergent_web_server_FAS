@@ -178,7 +178,7 @@ component provides App requires io.Output out, data.IntUtil iu, rest.RESys, io.I
 
 	void handlePerception(char perceptionData[], TextFile file) {
 		if (perceptionData == "{}") {
-			out.println("$(debugMSG) No perception data.")
+			out.println("$(debugMSG) No perception data. interactive")
 			return
 		}
 		char result[] = ""
@@ -193,7 +193,7 @@ component provides App requires io.Output out, data.IntUtil iu, rest.RESys, io.I
 			result = new char[](result, pD[0].metrics[0].name, ": ", du.decToString(metricValue), " ms")
 			out.println("$(debugMSG) $(result)")
 		} else {
-			out.println("$(debugMSG) No perception data.")
+			out.println("$(debugMSG) No perception data. interactive 2")
 		}
 	}
 

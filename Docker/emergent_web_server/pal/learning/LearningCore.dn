@@ -192,7 +192,7 @@ component provides learning.LearningCore requires io.Output out, data.IntUtil iu
 			internalCycle.metrics = pD[0].metrics
 			internalCycle.events = pD[0].events
 		} else {
-			out.println("$(debugMSG) ERROR: No perception data.")
+			out.println("$(debugMSG) ERROR: No perception data. learn core")
 			return null
 		}
 		return internalCycle

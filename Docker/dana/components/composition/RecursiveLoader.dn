@@ -7,33 +7,19 @@ data ReqIntf {
 	bool isNative
 	}
 
-component provides composition.RecursiveLoader requires composition.Search search, Loader loader, NativeLoader nLoader, data.json.JSONParser parser, composition.ObjectWriter, System system, data.IntUtil iu {
+component provides composition.RecursiveLoader requires composition.Search search, Loader loader, NativeLoader nLoader, data.json.JSONParser parser, util.ObjectFile, System system, data.IntUtil iu {
 	
 	ReqIntf[] getRequiredInterfaces(char com[])
 		{
 		ReqIntf result[]
-		
-		ObjectWriter reader = new ObjectWriter(com)
-		InfoSection section = reader.getInfoSection("DNIL", "json")
-		
-		JSONElement document = parser.parseDocument(section.content)
-		
-		JSONElement requiredInterfaces = parser.getValue(document, "requiredInterfaces")
-		
-		if (requiredInterfaces != null)
+
+		InterfaceSpec ispec[] = loader.load(com).getRequires()
+
+		result = new ReqIntf[ispec.arrayLength]
+
+		for (int i = 0; i < ispec.arrayLength; i++)
 			{
-			for (int i = 0; i < requiredInterfaces.children.arrayLength; i++)
-				{
-				JSONElement ri = requiredInterfaces.children[i]
-				char package[] = parser.getValue(ri, "package").value
-				char alias[] = parser.getValue(ri, "alias").value
-				bool isNative = parser.getValue(ri, "native") != null && parser.getValue(ri, "native").value == "true"
-				char semantic[]
-				if (parser.getValue(ri, "semantic") != null)
-					semantic = parser.getValue(ri, "semantic").value
-				
-				result = new ReqIntf[](result, new ReqIntf(package, alias, semantic, isNative))
-				}
+			result[i] = new ReqIntf(ispec[i].package, ispec[i].alias, ispec[i].variant, ispec[i].flags == InterfaceSpec.F_NATIVE)
 			}
 		
 		return result
@@ -100,16 +86,12 @@ component provides composition.RecursiveLoader requires composition.Search searc
 		
 		for (int i = 0; i < ri.arrayLength; i++)
 			{
-			if (!ri[i].isNative && !isAutoBinding(ri[i].package) && !isIgnore(ignore, ri[i].package))
+			char pkg[] = ri[i].package
+			if (ri[i].semantic.arrayLength != 0) pkg = "$pkg:$(ri[i].semantic)"
+			
+			if (!ri[i].isNative && !isAutoBinding(ri[i].package) && !isIgnore(ignore, pkg))
 				{
-				char pkg[] = ri[i].package
-				char alias[] = ri[i].alias
-				if (ri[i].semantic.arrayLength != 0)
-					{
-					pkg = "$pkg:$(ri[i].semantic)"
-					alias = "$alias:$(ri[i].semantic)"
-					}
-				resolveDependency(lc, comIndex, pkg, alias)
+				resolveDependency(lc, comIndex, pkg, ri[i].alias)
 				}
 				else if (ri[i].isNative && !com.isConnected(ri[i].alias))
 				{

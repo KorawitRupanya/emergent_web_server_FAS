@@ -243,18 +243,8 @@ component provides KeyMapping {
 			else if (n == 27) return KeyCode.X
 			else if (n == 28) return KeyCode.Y
 			else if (n == 29) return KeyCode.Z
-			else if (n == 39) return KeyCode.NUM_0
-			else if (n == 30) return KeyCode.NUM_1
-			else if (n == 31) return KeyCode.NUM_2
-			else if (n == 32) return KeyCode.NUM_3
-			else if (n == 33) return KeyCode.NUM_4
-			else if (n == 34) return KeyCode.NUM_5
-			else if (n == 35) return KeyCode.NUM_6
-			else if (n == 36) return KeyCode.NUM_7
-			else if (n == 37) return KeyCode.NUM_8
-			else if (n == 38) return KeyCode.NUM_9
 		
-		return KeyCode.UNKNOWN
+		return KeyCode.OTHER
 		}
 	
 	}

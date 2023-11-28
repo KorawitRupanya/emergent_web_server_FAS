@@ -9,11 +9,18 @@ const int CURSOR_WIDTH = 1
 const byte CONTEXT_MENU = 0
 const byte CONTEXT_HINT = 1
 
+const int SCROLL_TICKS = 5
+
+uses IOWindow
+
 component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, os.SystemInfo sysInfo, os.Clipboard clipboard, locale.KeyMapping keyMapping, encoding.StringUTF {
 	
+	Mutex textLock = new Mutex()
+
 	bool passwordMask
 	
 	StringUTF currentText
+	StringUTF placeholder
 	char maskedText[]
 	Font textFont
 	
@@ -31,6 +38,8 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 	bool shiftDown
 	
 	byte keyState
+
+	bool mouseDragCapture
 	
 	ClickableObject clickTarget
 	
@@ -50,10 +59,11 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 	
 	byte contextMode = CONTEXT_MENU
 	
-	Color bgColor = new Color(200, 200, 220, 255)
+	Color bgColor = new Color(230, 230, 250, 255)
 	Color borderColor = new Color(180, 180, 190, 255)
 	Color highlightColor = new Color(160, 160, 200, 255)
 	Color textColor = new Color(0, 0, 0, 255)
+	Color placeholderTextColor = new Color(90, 90, 90, 255)
 	
 	TextField:TextField()
 		{
@@ -210,28 +220,31 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 		
 		if (ch != null)
 			{
-			if (selectStartPos != cursorPosition)
+			mutex(textLock)
 				{
-				deleteSelection()
-				if (selectStartPos > cursorPosition)
-					selectStartPos = cursorPosition
+				if (selectStartPos != cursorPosition)
+					{
+					deleteSelection()
+					if (selectStartPos > cursorPosition)
+						selectStartPos = cursorPosition
+						else
+						cursorPosition = selectStartPos
+					}
+				
+				if (cursorPosition == currentText.length())
+					{
+					currentText.append(ch)
+					}
 					else
-					cursorPosition = selectStartPos
+					{
+					currentText.insert(cursorPosition, ch)
+					}
+				
+				maskedText = new char[](maskedText, "*")
+				
+				cursorPosition ++
+				selectStartPos = cursorPosition
 				}
-			
-			if (cursorPosition == currentText.length())
-				{
-				currentText.append(ch)
-				}
-				else
-				{
-				currentText.insert(cursorPosition, ch)
-				}
-			
-			maskedText = new char[](maskedText, "*")
-			
-			cursorPosition ++
-			selectStartPos = cursorPosition
 			
 			updateCursorPosition()
 			
@@ -239,7 +252,7 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 			
 			postRepaint()
 			}
-			else if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.UNKNOWN)
+			else if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.OTHER)
 			{
 			if (kCode == KeyCode.SHIFT_LEFT || kCode == KeyCode.SHIFT_RIGHT)
 				{
@@ -254,9 +267,15 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 				return
 				}
 			
-			if (kCode == KeyCode.ALT_LEFT || kCode == KeyCode.ALT_RIGHT)
+			if (kCode == KeyCode.ALT_LEFT)
 				{
 				keyState |= KeyState.KEY_ALT
+				return
+				}
+			
+			if (kCode == KeyCode.ALT_RIGHT)
+				{
+				keyState |= KeyState.KEY_ALTGR
 				return
 				}
 			
@@ -268,25 +287,28 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 			
 			if (kCode == KeyCode.DELETE)
 				{
-				if (currentText.length() > 0)
+				mutex(textLock)
 					{
-					if (cursorPosition == selectStartPos && cursorPosition < currentText.length())
+					if (currentText.length() > 0)
 						{
-						selectStartPos = cursorPosition + 1
-						deleteSelection()
-						selectStartPos --
-						}
-						else
-						{
-						deleteSelection()
-						
-						if (cursorPosition > selectStartPos)
+						if (cursorPosition == selectStartPos && cursorPosition < currentText.length())
 							{
-							cursorPosition = selectStartPos
+							selectStartPos = cursorPosition + 1
+							deleteSelection()
+							selectStartPos --
 							}
 							else
 							{
-							selectStartPos = cursorPosition
+							deleteSelection()
+							
+							if (cursorPosition > selectStartPos)
+								{
+								cursorPosition = selectStartPos
+								}
+								else
+								{
+								selectStartPos = cursorPosition
+								}
 							}
 						}
 					
@@ -296,25 +318,28 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 			
 			if (kCode == KeyCode.BACKSPACE)
 				{
-				if (currentText.length() > 0)
+				mutex(textLock)
 					{
-					if (cursorPosition == selectStartPos && cursorPosition > 0)
+					if (currentText.length() > 0)
 						{
-						selectStartPos = cursorPosition - 1
-						deleteSelection()
-						cursorPosition --
-						}
-						else
-						{
-						deleteSelection()
-						
-						if (cursorPosition > selectStartPos)
+						if (cursorPosition == selectStartPos && cursorPosition > 0)
 							{
-							cursorPosition = selectStartPos
+							selectStartPos = cursorPosition - 1
+							deleteSelection()
+							cursorPosition --
 							}
 							else
 							{
-							selectStartPos = cursorPosition
+							deleteSelection()
+							
+							if (cursorPosition > selectStartPos)
+								{
+								cursorPosition = selectStartPos
+								}
+								else
+								{
+								selectStartPos = cursorPosition
+								}
 							}
 						}
 					
@@ -382,7 +407,7 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 		{
 		byte kCode
 		
-		if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.UNKNOWN)
+		if ((kCode = keyMapping.getKeyCode(keyCode)) != KeyCode.OTHER)
 			{
 			if (kCode == KeyCode.SHIFT_LEFT || kCode == KeyCode.SHIFT_RIGHT)
 				{
@@ -400,6 +425,12 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 			if (kCode == KeyCode.ALT_LEFT)
 				{
 				keyState &= ~KeyState.KEY_ALT
+				}
+			
+			if (kCode == KeyCode.ALT_RIGHT)
+				{
+				keyState &= ~KeyState.KEY_ALTGR
+				return
 				}
 			
 			if (kCode == KeyCode.CMD)
@@ -434,20 +465,91 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 	
 	void TextField:click(int x, int y, int button)
 		{
-		focus = true
-		if (button == MouseButtons.BUTTON_LEFT)
+		if (!focus)
 			{
-			//locate this position in the text, and set the cursor there
-			cursorPosition = findCursorPos(x + hScroll)
-			selectStartPos = cursorPosition
+			setFocus()
 			postRepaint()
 			}
-			else if (button == MouseButtons.BUTTON_RIGHT)
+		
+		if (button == MouseButtons.BUTTON_RIGHT)
 			{
 			menu.xAnchor = x
 			menu.yAnchor = y
 			contextMode = CONTEXT_MENU
 			emitevent contextMenuOn(menu)
+			}
+		}
+	
+	bool isAlphaNum(char x[])
+		{
+		if (x.arrayLength > 1) return false
+		
+		if ((x[0] >= "a") && (x[0] <= "z")) return true
+		
+		if ((x[0] >= "A") && (x[0] <= "Z")) return true
+		
+		if ((x[0] >= "0") && (x[0] <= "9")) return true
+		
+		return false
+		}
+	
+	void TextField:clickMulti(int x, int y, int button, int clicks)
+		{
+		focus = true
+		if (button == MouseButtons.BUTTON_LEFT && clicks == 2)
+			{
+			//check if this position is inside a word, with no special characters; if so, highlight that word and place the cursor at its end
+			// - we keep doing subString() on either side of the cursor position, for a length of one character, to see if that single character is a <a-x/A-Z/0-9> character, and if so we keep expanding our selection box on both sides until we hit something else
+			cursorPosition = findCursorPos(x + hScroll)
+			selectStartPos = cursorPosition
+			
+			int xl = cursorPosition
+			
+			while (xl < currentText.length())
+				{
+				char n[] = currentText.subString(xl, 1)
+				
+				if (isAlphaNum(n))
+					{
+					xl ++
+					}
+					else
+					{
+					break
+					}
+				}
+			
+			cursorPosition = xl
+			
+			int xr = selectStartPos
+			
+			while (xr > 0)
+				{
+				char n[] = currentText.subString(xr-1, 1)
+				
+				if (isAlphaNum(n))
+					{
+					xr --
+					}
+					else
+					{
+					break
+					}
+				}
+			
+			selectStartPos = xr
+
+			updateCursorPosition()
+
+			postRepaint()
+			}
+			else if (button == MouseButtons.BUTTON_LEFT && clicks == 3)
+			{
+			//select all
+			selectStartPos = 0
+			cursorPosition = currentText.length()
+
+			postRepaint()
 			}
 		}
 	
@@ -523,12 +625,68 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 	
 	void TextField:mouseUp(int x, int y, int button)
 		{
-		
+		if (button == MouseButtons.BUTTON_LEFT)
+			{
+			mouseDragCapture = false
+
+			if (!focus)
+				{
+				setFocus()
+				postRepaint()
+				}
+			}
+		}
+	
+	void TextField:mouseMove(int x, int y)
+		{
+		if (mouseDragCapture)
+			{
+			int newPos = findCursorPos(x + hScroll)
+
+			if (newPos != cursorPosition)
+				{
+				cursorPosition = newPos
+				postRepaint()
+				}
+			}
 		}
 	
 	void TextField:mouseDown(int x, int y, int button)
 		{
+		if (button == MouseButtons.BUTTON_LEFT)
+			{
+			//locate this position in the text, and set the cursor there
+			cursorPosition = findCursorPos(x + hScroll)
+
+			if (!shiftDown)
+				selectStartPos = cursorPosition
+			
+			mouseDragCapture = true
+			
+			postRepaint()
+			}
+		}
+	
+	void TextField:mouseWheel(int xAdd, int xSub, int yAdd, int ySub)
+		{
+		int maxScroll = 0
 		
+		int textWidth = textFont.getTextWidth(currentText.getRaw())
+
+		if (textWidth > (width - (TEXT_BORDER_H*2) - CURSOR_WIDTH))
+			maxScroll = textWidth - (width - (TEXT_BORDER_H*2) - CURSOR_WIDTH)
+
+		if (yAdd != 0 && hScroll < SCROLL_TICKS)
+			hScroll = 0
+			else
+			hScroll -= (yAdd*SCROLL_TICKS)
+		
+		if (ySub != 0 && (hScroll + (ySub*SCROLL_TICKS)) > maxScroll)
+			hScroll = maxScroll
+			else
+			hScroll += (ySub*SCROLL_TICKS)
+		
+		postRepaint()
 		}
 
 	char[] TextField:getText()
@@ -546,6 +704,16 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 			k[i] = "*"
 			}
 		maskedText = k
+		postRepaint()
+		}
+	
+	void TextField:setPlaceholder(char text[])
+		{
+		if (text != null)
+			placeholder = new StringUTF(text)
+			else
+			placeholder = null
+		
 		postRepaint()
 		}
 	
@@ -571,7 +739,7 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 		{
 		int xp = getX(pos)
 		
-		c.drawLine(new Line2D(xp, 0, xp, height, new Color(0, 0, 0, 255)))
+		c.line(new Line2D(xp, 0, xp, height, new Color(0, 0, 0, 255)))
 		}
 	
 	void drawSelectionBox(Canvas c)
@@ -595,7 +763,7 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 			int selectStartX = getX(startPos)
 			int selectEndX = getX(endPos)
 			
-			c.drawRect(new Rect2D(selectStartX, 0, selectEndX - selectStartX, height, highlightColor))
+			c.rect(new Rect2D(selectStartX, 0, selectEndX - selectStartX, height, highlightColor))
 			}
 		}
 	
@@ -627,27 +795,35 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 	
 	void TextField:paint(Canvas c)
 		{
-		c.drawRect(new Rect2D(xPosition, yPosition, width, height, bgColor))
+		c.rect(new Rect2D(xPosition, yPosition, width, height, bgColor))
 		
 		c.pushSurface(new Rect(xPosition + TEXT_BORDER_H, yPosition, width - (TEXT_BORDER_H*2), height), hScroll, 0, 255)
 		
-		c.drawRect(new Rect2D(hScroll, 0, width, height, bgColor))
-		
-		drawSelectionBox(c)
-		
-		if (passwordMask)
-			c.drawText(new Point2D(0, TEXT_BORDER_V, textColor), textFont, maskedText)
-			else
-			c.drawText(new Point2D(0, TEXT_BORDER_V, textColor), textFont, currentText.getRaw())
-		
-		if (focus)
+		c.rect(new Rect2D(hScroll, 0, width, height, bgColor))
+
+		mutex(textLock)
 			{
-			drawCursor(c, cursorPosition)
+			drawSelectionBox(c)
+			
+			if (passwordMask)
+				c.text(new Point2D(0, TEXT_BORDER_V, textColor), textFont, maskedText)
+				else
+				c.text(new Point2D(0, TEXT_BORDER_V, textColor), textFont, currentText.getRaw())
+			
+			if (focus)
+				{
+				drawCursor(c, cursorPosition)
+				}
+			
+			if (currentText.length() == 0 && placeholder != null)
+				{
+				c.text(new Point2D(0, TEXT_BORDER_V, placeholderTextColor), textFont, placeholder.getRaw())
+				}
 			}
 		
 		c.popSurface()
 		
-		c.drawRectOutline(new Rect2D(xPosition, yPosition, width, height, borderColor))
+		c.rectOutline(new Rect2D(xPosition, yPosition, width, height, borderColor))
 		}
 	
 	void TextField:postRepaint()
@@ -669,6 +845,11 @@ component provides TextField requires io.Output out, data.IntUtil iu, ui.Font, o
 	WH TextField:getPreferredSize()
 		{
 		return new WH(width, height)
+		}
+	
+	void TextField:mouseOver()
+		{
+		emitevent setCursor(new CursorSetEvent(IOWindow.CURSOR_IBEAM))
 		}
 	
 	void TextField:setFocus()
