@@ -1,6 +1,6 @@
-**Group: 2_3_Emergent Web Server_NU-5B51-Collaborative_Jorit-Rishikesh
+\*\*Group: 2_3_Emergent Web Server_NU-5B51-Collaborative_Jorit-Rishikesh
 
-Quick Start**
+Quick Start\*\*
 
 On your terminal, build the Image:
 
@@ -63,7 +63,8 @@ The system will require some information before starting learning. The available
 After providinng the learning algorithm with the requested information, the prompt waits until the user presses [ENTER] to start executing the learning algorithm. At this point, we advise the user to start a client script. We recommend the user to start a new terminal and gain access to the docker container using '$ docker exec -it ews bash'. Then the user should go to 'ws_clients' folder:
 
 $ docker exec -it ews bash
-then
+
+Then...
 
 $ cd ws_clients/
 
@@ -71,8 +72,8 @@ Then list, choose and execute the client scripts:
 
 $ ls
 
-For listing the folder's content. The following command executes one of the client scripts:
+For listing the folder's content. There are 3 different clients with different workload. The following command executes one of the client scripts:
 
-$ dana ClientImagePattern.o
+$ dana ClientTextPattern.o
 
-Once the client is executing, the user can go back to the previous terminal where the InteractiveEmergentSys.o is executing and press [ENTER] to start learning. The learning process will take a little over 3.5 min (if the arguments are 5000 for the observation window, 3 for the exploration threshold and 52 for the number of rounds). The learning algorithm prints the composition it is exploring and the average response time of that particular composition during execution. After exploration phase, the algorithm selects the composition that presented the lowest response time.
+Once the client is executing, the user can go back to the UPISAS and run the code where MAPE-K loop is developed. The learning algorithm in UPISAS will prints the composition it is exploring and the average response time of that particular composition during execution. After exploration phase, the algorithm selects the composition that presented the lowest response time.

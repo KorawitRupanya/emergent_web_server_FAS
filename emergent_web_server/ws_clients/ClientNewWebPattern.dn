@@ -2,7 +2,7 @@ component provides App requires io.Output out, net.http.HTTPRequest http, data.I
 	time.Calendar calendar, time.DateUtil dateUtil {
 
 	char server[] = "localhost"
-	int NUM_THREADS = 2
+	int NUM_THREADS = 10
 
 	void makeRequest(char resource[], int id) {
 		DateTime start = calendar.getTime()

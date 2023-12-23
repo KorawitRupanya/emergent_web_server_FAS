@@ -176,12 +176,14 @@ component provides learning.Learning requires io.Output out, data.IntUtil iu, ti
 		return currentConfig
 	}
 
+	//THIS IS THE MAIN FUNCTION Nashid
 	void Learning:learns(RESys resys, int collectionTime, int explorationTreshold,
 	 int rounds) {
 		sys = resys
 		TRESHOLD = explorationTreshold
 		COLLECTION_TIME = collectionTime
 		configList = sys.getAllConfigs()
+		// here it goes to learning mode and starts the learning process (exploration)
 		core = new LearningCore(configList)
 		mode = STARTEXPLORING
 		out.println("$(debugMSG) Learning started...")
